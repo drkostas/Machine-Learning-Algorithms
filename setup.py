@@ -20,16 +20,6 @@ class CleanCommand(Command):
 with open('requirements.txt') as f:
     requirements = f.readlines()
 
-# For the cases you want a different package to be installed on local and prod environments
-# import subprocess
-# LOCAL_ARG = '--local'
-# if LOCAL_ARG in sys.argv:
-#     index = sys.argv.index(LOCAL_ARG)  # Index of the local argument
-#     sys.argv.pop(index)  # Removes the local argument in order to prevent the setup() error
-#     subprocess.check_call([sys.executable, "-m", "pip", "install", 'A package that works locally'])
-# else:
-#     subprocess.check_call([sys.executable, "-m", "pip", "install", 'A package that works on production'])
-
 # Load README
 with open('README.md') as readme_file:
     readme = readme_file.read()
@@ -37,12 +27,9 @@ with open('README.md') as readme_file:
 setup_requirements = []
 test_requirements = []
 
-COMMANDS = [
-    'cli = cosc522.cli:app',
-    'cosc522_main = cosc522.main:main'
-]
+COMMANDS = []
 
-data_files = ['cosc522/configuration/yml_schema.json']
+data_files = []
 
 setup(
     author="drkostas",
@@ -70,12 +57,10 @@ setup(
     keywords='cosc522',
     name='cosc522',
     # package_dir={'': '.'},
-    packages=find_packages(include=['cosc522',
-                                    'cosc522.*']),
+    packages=find_packages(include=['custom_libs',
+                                    'custom_libs.*']),
     # py_modules=['main'],
     setup_requires=setup_requirements,
-    test_suite='tests',
-    tests_require=test_requirements,
     url='https://github.com/drkostas/COSC522.git',
     version='0.1.0',
     zip_safe=False,

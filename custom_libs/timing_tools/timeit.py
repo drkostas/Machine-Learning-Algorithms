@@ -3,7 +3,7 @@ from typing import Callable, IO
 from functools import wraps
 from time import time
 
-from cosc522 import ColorizedLogger
+from custom_libs import ColorizedLogger
 
 time_logger = ColorizedLogger('Timeit', 'white')
 
