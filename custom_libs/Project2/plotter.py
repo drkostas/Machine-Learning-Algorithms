@@ -49,3 +49,25 @@ class Plotter:
         ax[2].margins(0.1)  # 1% padding in all directions
         fig.tight_layout()
         fig.show()
+
+    @staticmethod
+    def plot_knn_overall_accuracies(synth_k_range, synth_accuracies, pima_k_range, pima_accuracies):
+        fig, ax = plt.subplots(2, 1, figsize=(11, 9))
+
+        # Synth Dataset
+        ax[0].plot(synth_k_range, synth_accuracies, label='Synthetic Dataset', color='deepskyblue')
+        ax[0].set_title('Overall Classification accuracy vs k for the Synthetic Dataset')
+        ax[0].set_xlabel('k')
+        ax[0].set_ylabel('Overall Classification Accuracy')
+        _ = ax[0].set_xticks(synth_k_range)
+        ax[0].legend()
+        # Pima Dataset
+        ax[1].plot(pima_k_range, pima_accuracies, label='Pima Dataset', color='orange')
+        ax[1].set_title('Overall Classification accuracy vs k for the Pima Dataset')
+        ax[1].set_xlabel('k')
+        ax[1].set_ylabel('Overall Classification Accuracy')
+        _ = ax[1].set_xticks(pima_k_range)
+        ax[1].legend()
+        # Show plot
+        fig.tight_layout()
+        fig.show()

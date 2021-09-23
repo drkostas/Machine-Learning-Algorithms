@@ -1,7 +1,5 @@
 """Timeit sub-package of COSC522."""
 
-from .parametric_model import ParametricModel
-from .data_loader import DataLoader
 from .plotter import Plotter
 
 __author__ = "drkostas"

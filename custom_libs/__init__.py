@@ -2,7 +2,7 @@
 
 from custom_libs.fancy_logger import ColorizedLogger
 from custom_libs.timing_tools import timeit
-from custom_libs.Project1 import ParametricModel
+from custom_libs.Project1 import ParametricModel, DataLoader, Plotter
 
 __author__ = "drkostas"
 __email__ = "georgiou.kostas94@gmail.com"
