@@ -17,7 +17,7 @@ class ParametricModel:
     covs: np.ndarray
     avg_mean: np.ndarray
     avg_std: np.ndarray
-    avg_cov: np.ndarray
+    first_and_second_case_cov: np.ndarray
     avg_var: np.ndarray
 
     def __init__(self, train: np.ndarray, test: np.ndarray) -> None:
@@ -43,7 +43,6 @@ class ParametricModel:
 
     def fit(self) -> None:
         """ Trains the model on the training dataset and returns the means and the average variance """
-
         # Calculate means, covariance for each feature
         means = []
         stds = []
@@ -59,19 +58,17 @@ class ParametricModel:
         self.covs = np.array(covs)
         self.avg_mean = np.mean(self.means, axis=0)
         self.avg_std = np.mean(self.stds, axis=0)
-        self.avg_cov = np.mean(self.covs, axis=0)
-        self.avg_var = np.mean(np.diagonal(self.avg_cov), axis=0)
 
     def _build_g_euclidean(self, sample, n_class, priors: List[float]):
         first_term = np.matmul(self.means[n_class].T, self.x_test[sample]) / self.avg_var
         second_term = np.matmul(self.means[n_class].T, self.means[n_class]) / (2 * self.avg_var)
         third_term = np.log(priors[n_class])
-        g = first_term - second_term
+        g = first_term - second_term + third_term
         return g
 
     def _build_g_mahalanobis(self, sample, n_class, priors: List[float]):
         first_term_dot_1 = np.matmul((self.x_test[sample] - self.means[n_class]).T,
-                                     np.linalg.inv(self.avg_cov))
+                                     np.linalg.inv(self.first_and_second_case_cov))
         first_term = -(1 / 2) * np.matmul(first_term_dot_1,
                                           (self.x_test[sample] - self.means[n_class]))
         second_term = np.log(priors[n_class])
@@ -88,8 +85,21 @@ class ParametricModel:
         g = first_term + second_term + third_term
         return g
 
-    def predict(self, mtype: str, priors: List[float] = None) -> np.ndarray:
+    def predict(self, mtype: str, priors: List[float] = None,
+                first_and_second_case_cov_type: str = 'avg') -> np.ndarray:
         """ Tests the model on the test dataset and returns the accuracy. """
+
+        # Which covariance to use in the first and second case
+        if first_and_second_case_cov_type == 'avg':
+            self.first_and_second_case_cov = np.mean(self.covs, axis=0)
+        elif first_and_second_case_cov_type == 'first':
+            self.first_and_second_case_cov = self.covs[0]
+        elif first_and_second_case_cov_type == 'second':
+            self.first_and_second_case_cov = self.covs[1]
+        else:
+            raise Exception('first_and_second_case_cov_type should be one of: avg, first, second')
+        # Calculate avg_var based on the choice
+        self.avg_var = np.mean(np.diagonal(self.first_and_second_case_cov), axis=0)
         # If no priors were given, set them as equal
         if not priors:
             priors = [1.0 / len(self.unique_classes) for _ in self.unique_classes]

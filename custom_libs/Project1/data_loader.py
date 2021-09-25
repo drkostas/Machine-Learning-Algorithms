@@ -1,6 +1,10 @@
 import numpy as np
 from typing import Tuple
 
+from custom_libs import ColorizedLogger
+
+logger = ColorizedLogger('Data Loader', 'cyan')
+
 
 class DataLoader:
     """ Synth and Pima Data loading and preprocess Class. """
@@ -48,10 +52,14 @@ class DataLoader:
 
     @staticmethod
     def _print_statistics(np_arr: np.array, var_name: str) -> None:
-        print(f"-- {var_name} --")
-        print(f"\tShape: {np_arr.shape}")
-        print(f"\tType: {np_arr.dtype}")
-        print(f"\tMean:\n\t\t{np_arr.mean(axis=0)[:4]} (..)")
-        print(f"\tMax:\n\t\t{np_arr.max(axis=0)[:4]} (..)")
-        print(f"\tMin:\n\t\t{np_arr.min(axis=0)[:4]} (..)")
-        print(f"\tHead:\n\t\t{np_arr[0, :4]} (..)")
+        logger.info(f"-- {var_name} --")
+        logger.info(f"\tShape: {np_arr.shape}")
+        logger.info(f"\tType: {np_arr.dtype}")
+        logger.info(f"\tMean:")
+        logger.info(f"\t\t{np_arr.mean(axis=0)[:4]} (..)")
+        logger.info(f"\tMax:")
+        logger.info(f"\t\t{np_arr.max(axis=0)[:4]} (..)")
+        logger.info(f"\tMin:")
+        logger.info(f"\t\t{np_arr.min(axis=0)[:4]} (..)")
+        logger.info(f"\tHead:")
+        logger.info(f"\t\t{np_arr[0, :4]} (..)")

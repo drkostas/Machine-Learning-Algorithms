@@ -3,4 +3,4 @@ See the [issues](https://github.com/drkostas/cosc522/issues) too.
 - [X] Ported Project 1
 - [X] Create Project 2 Notebook
 - [X] Import Project 1 Class into Project 2 Notebook
-- [ ] Finish Project 2
+- [X] Finish Project 2
