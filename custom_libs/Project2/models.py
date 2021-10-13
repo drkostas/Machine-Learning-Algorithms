@@ -265,11 +265,11 @@ class WTA:
         return self.predicted_y
 
     def _run(self, epsilon: float = 0.01):
-        # Loop until convergence
         num_test_points = self.test_x.shape[0]
         self.predicted_y = np.zeros(num_test_points, dtype=np.uint8)
         self.total_epochs = 1
         self.membership_changes = []
+        # Loop until convergence
         while True:
             self.total_epochs += 1
             dist = np.empty((num_test_points, 0))
@@ -281,11 +281,10 @@ class WTA:
             self.predicted_y = np.argmin(dist, axis=1)
             df = pd.DataFrame(np.column_stack((self.test_x, self.predicted_y)))
             cen = df.groupby([df.iloc[:, -1]], as_index=False).mean()
-
+            # Modify Centroids
             for j in range(cen.shape[0]):
                 self.centroids[int(cen.iloc[int(j), -1]), :] \
-                    += epsilon * (
-                            cen.iloc[j, :-1].values - self.centroids[int(cen.iloc[int(j), -1]), :])
+                    += epsilon*(cen.iloc[j, :-1].values-self.centroids[int(cen.iloc[int(j), -1]), :])
 
             # Break Condition
             self.membership_changes.append(np.count_nonzero(self.predicted_y != previous_assignments))

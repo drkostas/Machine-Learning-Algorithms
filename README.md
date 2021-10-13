@@ -28,6 +28,7 @@ Read the [TODO](TODO.md) to see the current task list.
 All the libraries are located under *"\<project root>/custom_libs"*
 - ***Project1***: Loc: **Project1**, Desc: *Code needed in Project 1*
 - ***Project2***: Loc: **Project1**, Desc: *Code needed in Project 2*
+- ***Project2***: Loc: **Project1**, Desc: *Code needed in Project 3*
 - ***ColorizedLogger***: Loc: **fancy_logger/colorized_logger.py**, Desc: *Logger with formatted text capabilities*
 - ***timeit***: Loc: **timing_tools/timeit.py**, Desc: *Decorator/ContextManager for counting the execution times of functions and code blocks*
 
