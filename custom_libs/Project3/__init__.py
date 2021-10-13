@@ -1,7 +1,7 @@
-"""Timeit sub-package of COSC522."""
+"""Project 3 sub-package of COSC522."""
 
 from .plotter import Plotter
-# from .models import *
+from .models import *
 
 __author__ = "drkostas"
 __email__ = "georgiou.kostas94@gmail.com"

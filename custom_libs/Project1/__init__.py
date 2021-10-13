@@ -1,4 +1,4 @@
-"""Timeit sub-package of COSC522."""
+"""Project 1 sub-package of COSC522."""
 
 from .parametric_model import ParametricModel
 from .data_loader import DataLoader

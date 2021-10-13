@@ -1,4 +1,4 @@
-"""Timeit sub-package of COSC522."""
+"""Project 2 sub-package of COSC522."""
 
 from .plotter import Plotter
 from .models import KNN

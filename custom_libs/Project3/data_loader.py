@@ -1,6 +1,6 @@
 import numpy as np
 import cv2
-from typing import Tuple, List, Set
+from typing import *
 import os.path
 
 from custom_libs import ColorizedLogger
@@ -26,16 +26,6 @@ class DataLoader:
         self.data_folder = data_folder
         self.load_datasets()
 
-    def get_datasets(self) -> List[np.ndarray]:
-        return_datasets = []
-        if 'synth' in self.active_datasets:
-            return_datasets.extend([self.synth_te, self.synth_tr])
-        if 'pima' in self.active_datasets:
-            return_datasets.extend([self.pima_tr, self.pima_te])
-        if 'flowers' in self.active_datasets:
-            return_datasets.extend([self.flowers])
-        return return_datasets
-
     def load_datasets(self):
         if 'synth' in self.active_datasets:
             # Load and replace Yes/No with 0/1
@@ -59,8 +49,8 @@ class DataLoader:
             pima_means = pima_tr_orig[:, :7].mean(axis=0)
             pima_max = pima_tr_orig[:, :7].max(axis=0)
             pima_min = pima_tr_orig[:, :7].min(axis=0)
-            self.pima_tr[:, :7] = (pima_tr_orig[:, :7] - pima_means) / (pima_max-pima_min)
-            self.pima_te[:, :7] = (pima_te_orig[:, :7] - pima_means) / (pima_max-pima_min)
+            self.pima_tr[:, :7] = (pima_tr_orig[:, :7] - pima_means) / (pima_max - pima_min)
+            self.pima_te[:, :7] = (pima_te_orig[:, :7] - pima_means) / (pima_max - pima_min)
             if print_statistics:
                 self._print_statistics(self.pima_tr, "pima_tr")
                 self._print_statistics(self.pima_te, "pima_te")
@@ -81,6 +71,16 @@ class DataLoader:
                 self._print_statistics(self.pima_te, "pima_te")
         else:
             logger.warning("Pima hasn't been loaded. Skipping..")
+
+    def get_datasets(self) -> Dict[str, List[np.ndarray]]:
+        return_datasets = {}
+        if 'synth' in self.active_datasets:
+            return_datasets['synth'] = [self.synth_te, self.synth_tr]
+        if 'pima' in self.active_datasets:
+            return_datasets['pima'] = [self.pima_tr, self.pima_te]
+        if 'flowers' in self.active_datasets:
+            return_datasets['flowers'] = [self.flowers]
+        return return_datasets
 
     def print_statistics(self) -> None:
         if 'synth' in self.active_datasets:
