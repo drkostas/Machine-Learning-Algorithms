@@ -57,6 +57,22 @@ class DataLoader:
             pima_tr_orig = np.copy(self.pima_tr)
             pima_te_orig = np.copy(self.pima_te)
             pima_means = pima_tr_orig[:, :7].mean(axis=0)
+            pima_max = pima_tr_orig[:, :7].max(axis=0)
+            pima_min = pima_tr_orig[:, :7].min(axis=0)
+            self.pima_tr[:, :7] = (pima_tr_orig[:, :7] - pima_means) / (pima_max-pima_min)
+            self.pima_te[:, :7] = (pima_te_orig[:, :7] - pima_means) / (pima_max-pima_min)
+            if print_statistics:
+                self._print_statistics(self.pima_tr, "pima_tr")
+                self._print_statistics(self.pima_te, "pima_te")
+        else:
+            logger.warning("Pima hasn't been loaded. Skipping..")
+
+    def standarize_pima(self, print_statistics: bool = False) -> None:
+        if 'pima' in self.active_datasets:
+            # Normalize Pima
+            pima_tr_orig = np.copy(self.pima_tr)
+            pima_te_orig = np.copy(self.pima_te)
+            pima_means = pima_tr_orig[:, :7].mean(axis=0)
             pima_stds = pima_tr_orig[:, :7].std(axis=0)
             self.pima_tr[:, :7] = (pima_tr_orig[:, :7] - pima_means) / pima_stds
             self.pima_te[:, :7] = (pima_te_orig[:, :7] - pima_means) / pima_stds
