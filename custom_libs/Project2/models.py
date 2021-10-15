@@ -83,7 +83,7 @@ class KNN:
 
         return self.accuracy, self.classwise_accuracy, self.prediction_time
 
-    def get_confusion_matrix(self, mtype: str) -> Tuple[int, int, int, int]:
+    def get_confusion_matrix(self) -> Tuple[int, int, int, int]:
         # Get True Positives
         y_test_positive = self.test_y[self.test_y == self.unique_classes[0]]
         y_pred_positive = self.predicted_y[self.test_y == self.unique_classes[0]]
