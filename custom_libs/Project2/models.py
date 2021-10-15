@@ -21,11 +21,14 @@ class KNN:
     test_y: np.ndarray
     predicted_y: np.ndarray
     unique_classes: np.ndarray
+    tp: int
+    fn: int
+    fp: int
+    tn: int
 
     def __init__(self, train: np.ndarray, k: int) -> None:
         # Split train dataset into x and y
         self.train_x, self.train_y = self.x_y_split(train)
-
         self.k = k
         self.unique_classes = np.unique(self.train_y)
 
@@ -80,6 +83,22 @@ class KNN:
 
         return self.accuracy, self.classwise_accuracy, self.prediction_time
 
+    def get_confusion_matrix(self, mtype: str) -> Tuple[int, int, int, int]:
+        # Get True Positives
+        y_test_positive = self.test_y[self.test_y == self.unique_classes[0]]
+        y_pred_positive = self.predicted_y[self.test_y == self.unique_classes[0]]
+        self.tp = np.count_nonzero(y_pred_positive == y_test_positive)
+        # Get False Positives
+        self.fp = np.count_nonzero(y_pred_positive != y_test_positive)
+        # Get True Negatives
+        y_test_negative = self.test_y[self.test_y == self.unique_classes[1]]
+        y_pred_negative = self.predicted_y[self.test_y == self.unique_classes[1]]
+        self.tn = np.count_nonzero(y_test_negative == y_pred_negative)
+        # Get False Negatives
+        self.fn = np.count_nonzero(y_test_negative != y_pred_negative)
+
+        return self.tp, self.fn, self.fp, self.fn
+
     def print_statistics(self, name: str) -> None:
         # Check if statistics have be calculated
         if any(v is None for v in [self.accuracy, self.classwise_accuracy, self.prediction_time]):
@@ -88,6 +107,9 @@ class KNN:
         logger.info(f"The overall accuracy is: {self.accuracy:.4f}")
         logger.info(f"The classwise accuracies are: {self.classwise_accuracy}")
         logger.info(f"Total time: {self.prediction_time:.4f} sec(s)")
+        logger.info(f"|{'':^15}|{'Positive':^15}|{'Negative':^15}|", color='red')
+        logger.info(f"|{'Positive':^15}|{self.tp:^15}|{self.fn:^15}|", color='red')
+        logger.info(f"|{'Negative':^15}|{self.fp:^15}|{self.fn:^15}|", color='red')
 
 
 class Kmeans:

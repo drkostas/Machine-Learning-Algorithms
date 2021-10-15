@@ -34,10 +34,12 @@ class FLD:
         self.w = sw_inv @ class_means_diff
 
     def transform(self, data: np.ndarray) -> np.array:
-        data_x_c1, data_x_c2 = self.two_classes_split(dataset=data)
-        data_x_proj_c1 = data_x_c1 @ self.w
-        data_x_proj_c2 = data_x_c2 @ self.w
-        return self.two_classes_merge(data_x_proj_c1, data_x_proj_c2, data[:, -1][:, np.newaxis])
+        # data_x_c1, data_x_c2 = self.two_classes_split(dataset=data)
+        # data_x_proj_c1 = data_x_c1 @ self.w
+        # data_x_proj_c2 = data_x_c2 @ self.w
+        data_x, data_y = self.x_y_split(data)
+        data_x_proj_all = data_x @ self.w
+        return np.append(data_x_proj_all, data_y[:, np.newaxis], axis=1)
 
     @staticmethod
     def x_y_split(dataset: np.ndarray) -> Tuple[np.array, np.array]:
@@ -45,15 +47,11 @@ class FLD:
 
     @staticmethod
     def two_classes_split(dataset: np.ndarray) -> Tuple[np.array, np.array]:
-        data_x_c1 = dataset[dataset[:, -1] == 0][:, :-1]
-        data_x_c2 = dataset[dataset[:, -1] == 1][:, :-1]
+        data_x_c1_idx = dataset[:, -1] == 0
+        data_x_c1 = dataset[data_x_c1_idx][:, :-1]
+        data_x_c2_idx = dataset[:, -1] == 1
+        data_x_c2 = dataset[data_x_c2_idx][:, :-1]
         return data_x_c1, data_x_c2
-
-    @staticmethod
-    def two_classes_merge(data_x_c1: np.ndarray, data_x_c2: np.ndarray,
-                          data_y: np.ndarray) -> np.array:
-        data_x = np.append(data_x_c1, data_x_c2, axis=0)
-        return np.append(data_x, data_y, axis=1)
 
 
 class PCA:
@@ -90,7 +88,7 @@ class PCA:
                 n_first_lambdas = lambdas_sorted[:n_dropped_dims + 1]
                 pca_error = 1 - (np.sum(n_first_lambdas) / lambdas_sum)
                 if pca_error <= max_error:
-                    max_dims = n_dropped_dims+1
+                    max_dims = n_dropped_dims + 1
                     logger.info(f"For # dims={max_dims} error={pca_error} <= {max_error}")
                     break
         self.basis_vector = eig_vectors[:, lambdas_sorted_idx[:max_dims]]
