@@ -38,7 +38,7 @@ class DataLoader:
             self.pima_te = np.genfromtxt(os.path.join(self.data_folder, 'pima.te'),
                                          converters=pima_converter, autostrip=True)
         if 'flowers' in self.active_datasets:
-            # IT LOADS IT IT BGR!
+            # IT LOADS IT IN BGR!
             self.flowers = cv2.imread(os.path.join(self.data_folder, "flowersm.ppm"))
 
     def normalize_pima(self, print_statistics: bool = False) -> None:
@@ -79,7 +79,7 @@ class DataLoader:
         if 'pima' in self.active_datasets:
             return_datasets['pima'] = [self.pima_tr, self.pima_te]
         if 'flowers' in self.active_datasets:
-            return_datasets['flowers'] = [self.flowers]
+            return_datasets['flowers'] = self.flowers
         return return_datasets
 
     def print_statistics(self) -> None:

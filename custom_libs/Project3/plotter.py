@@ -46,25 +46,37 @@ class Plotter:
         cm_data_sorted = sorted(confusion_matrix_data, key=lambda row: row['fpr'])
         x = [cm_row['fpr'] for cm_row in cm_data_sorted]
         y = [cm_row['tpr'] for cm_row in cm_data_sorted]
-        point_labels = ['({}, {})'.format(*cm_row['priors']) for cm_row in cm_data_sorted]
-        fig, ax = plt.subplots(1, 1, figsize=(11, 4))
+        point_labels = [cm_row['priors'] for cm_row in cm_data_sorted]
+        fig, ax = plt.subplots(1, 1, figsize=(11, 11))
         ax.plot(x, y, '-', color='tab:orange')
+        previous_point = 0
+        y_step = 0.3
+        x_step = 0.01
         for px, py, pl in zip(x, y, point_labels):
-            if px <= 0.5:
-                pxl = px - 0.01
-                pyl = py + 0.1
-            else:
-                pxl = px - 0.01
-                pyl = py - 0.1
-            ax.annotate(pl, xy=(px, py), xytext=(pxl, pyl),
-                        bbox=dict(boxstyle="round", fc="none", ec="gray"),
-                        arrowprops=dict(facecolor='black', arrowstyle="fancy",
-                                        fc="0.6", ec="none",
-                                        connectionstyle="angle3,angleA=0,angleB=-90"))
+            # Don't annotate everything
+            if abs(previous_point - px) > 0.1:
+                previous_point = px
+                pxl = px - x_step
+                pyl = py - y_step
+                y_step -= 0.032
+                x_step += 0.008
+                pl_round = f'Priors: ({pl[0]:.2f}, {pl[1]:.2f})'
+                ax.annotate(pl_round, xy=(px, py), xytext=(pxl, pyl),
+                            bbox=dict(boxstyle="round", fc="none", ec="gray"),
+                            arrowprops=dict(facecolor='black', arrowstyle="fancy",
+                                            fc="0.6", ec="none",
+                                            connectionstyle="angle3,angleA=0,angleB=-90"))
         # Annotate Plot
         ax.set_title('ROC for pX using Case 3 for different priors')
         ax.set_xlabel('FPR')
         ax.set_ylabel('TPR')
+        ax.set_xticks(np.arange(0, 1.1, 0.1))
+        ax.set_yticks(np.arange(0, 1.1, 0.1))
+        ax.set_xlim([0, 1])
+        ax.set_ylim([0, 1])
+        ax.set_xbound(0, 1)
+        ax.set_ybound(0, 1)
         ax.grid(True)
+        ax.set_aspect('equal')
         # Fig Config
         fig.tight_layout()

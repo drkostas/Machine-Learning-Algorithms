@@ -168,15 +168,18 @@ class ParametricModel:
         y_pred_positive = self.predicted_y[mtype][self.y_test == self.unique_classes[0]]
         self.tp[mtype] = np.count_nonzero(y_pred_positive == y_test_positive)
         # Get False Positives
-        self.fp[mtype] = np.count_nonzero(y_pred_positive != y_test_positive)
+        self.fn[mtype] = np.count_nonzero(y_pred_positive != y_test_positive)
         # Get True Negatives
         y_test_negative = self.y_test[self.y_test == self.unique_classes[1]]
         y_pred_negative = self.predicted_y[mtype][self.y_test == self.unique_classes[1]]
         self.tn[mtype] = np.count_nonzero(y_test_negative == y_pred_negative)
         # Get False Negatives
-        self.fn[mtype] = np.count_nonzero(y_test_negative != y_pred_negative)
-
-        return self.tp[mtype], self.fn[mtype], self.fp[mtype], self.fn[mtype]
+        self.fp[mtype] = np.count_nonzero(y_test_negative != y_pred_negative)
+        # Error Checking
+        # from sklearn.metrics import confusion_matrix
+        # print(confusion_matrix(self.y_test, self.predicted_y[mtype]))
+        # print(np.array([[self.tp[mtype], self.fn[mtype]], [self.fp[mtype], self.tn[mtype]]]))
+        return self.tp[mtype], self.fn[mtype], self.fp[mtype], self.tn[mtype]
 
     def print_statistics(self, name: str, mtype: str) -> None:
         # Check if statistics have be calculated
@@ -188,4 +191,4 @@ class ParametricModel:
         logger.info(f"Total time: {self.prediction_time[mtype]:.4f} sec(s)")
         logger.info(f"|{'':^15}|{'Positive':^15}|{'Negative':^15}|", color='red')
         logger.info(f"|{'Positive':^15}|{self.tp[mtype]:^15}|{self.fn[mtype]:^15}|", color='red')
-        logger.info(f"|{'Negative':^15}|{self.fp[mtype]:^15}|{self.fn[mtype]:^15}|", color='red')
+        logger.info(f"|{'Negative':^15}|{self.fp[mtype]:^15}|{self.tn[mtype]:^15}|", color='red')

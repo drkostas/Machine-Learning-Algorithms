@@ -1,4 +1,5 @@
 import numpy as np
+import random
 import pandas as pd
 from scipy.spatial.distance import cdist
 from time import time
@@ -97,7 +98,7 @@ class KNN:
         # Get False Negatives
         self.fn = np.count_nonzero(y_test_negative != y_pred_negative)
 
-        return self.tp, self.fn, self.fp, self.fn
+        return self.tp, self.fn, self.fp, self.tn
 
     def print_statistics(self, name: str) -> None:
         # Check if statistics have be calculated
@@ -107,9 +108,10 @@ class KNN:
         logger.info(f"The overall accuracy is: {self.accuracy:.4f}")
         logger.info(f"The classwise accuracies are: {self.classwise_accuracy}")
         logger.info(f"Total time: {self.prediction_time:.4f} sec(s)")
-        logger.info(f"|{'':^15}|{'Positive':^15}|{'Negative':^15}|", color='red')
-        logger.info(f"|{'Positive':^15}|{self.tp:^15}|{self.fn:^15}|", color='red')
-        logger.info(f"|{'Negative':^15}|{self.fp:^15}|{self.fn:^15}|", color='red')
+        if hasattr(self, 'tp'):
+            logger.info(f"|{'':^15}|{'Positive':^15}|{'Negative':^15}|", color='red')
+            logger.info(f"|{'Positive':^15}|{self.tp:^15}|{self.fn:^15}|", color='red')
+            logger.info(f"|{'Negative':^15}|{self.fp:^15}|{self.tn:^15}|", color='red')
 
 
 class Kmeans:
@@ -125,18 +127,29 @@ class Kmeans:
     predicted_y: np.ndarray
     centroids: np.ndarray
     cluster_assignments: np.ndarray
-    unique_classes: np.ndarray
-    num_classes: int
+    unique_classes: Union[np.ndarray, None]
     total_epochs: int
     membership_changes: List[int]
+    k: int
 
-    def __init__(self, train_data: np.ndarray, seed: int = None) -> None:
+    def __init__(self, train_data: np.ndarray, k: int = None, x_y_split: bool = True,
+                 seed: int = None) -> None:
         # Split train dataset into x and y
-        self.train_x, self.train_y = self.x_y_split(train_data)
-        self.unique_classes = np.unique(self.train_y)
-        self.num_classes = len(self.unique_classes)
+        if x_y_split:
+            self.train_x, self.train_y = self.x_y_split(train_data)
+            self.unique_classes = np.unique(self.train_y)
+        else:
+            self.train_x = train_data
+            self.unique_classes = None
+        if k:
+            self.k = k
+        elif hasattr(self, 'unique_classes'):
+            self.k = len(self.unique_classes)
+        else:
+            raise Exception("When k is undefined, you can't have x_y_split=False")
         if seed is not None:
             np.random.seed(seed)
+            random.seed(seed)
 
     @staticmethod
     def x_y_split(dataset: np.ndarray) -> Tuple[np.array, np.array]:
@@ -155,36 +168,66 @@ class Kmeans:
     def fit(self):
         """ Initialize centroids randomly as distinct elements of features. """
         num_train_points = self.train_x.shape[0]  # num sample points
-        centroid_ids = np.random.choice(num_train_points, (self.num_classes,), replace=False)
+        centroid_ids = np.random.choice(num_train_points, (self.k,), replace=False)
         self.centroids = self.train_x[centroid_ids, :]
 
-    def predict(self, test_data: np.ndarray, dist: str = 'custom'):
+    @staticmethod
+    def random_init(ds, k, ):
+        """
+        Create random cluster centroids.
+
+        Parameters
+        ----------
+        ds : numpy array
+            The dataset to be used for centroid initialization.
+        k : int
+            The desired number of clusters for which centroids are required.
+        Returns
+        -------
+        centroids : numpy array
+            Collection of k centroids as a numpy array.
+        """
+
+        centroids = []
+        m = np.shape(ds)[0]
+
+        for _ in range(k):
+            r = np.random.randint(0, m - 1)
+            centroids.append(ds[r])
+
+        return np.array(centroids)
+
+    def predict(self, test_data: np.ndarray, dist: str = 'custom', x_y_split: bool = True,
+                max_iter: int = None, fix_mismatch: bool = True):
         # Get appropriate distance metric
-        if dist == 'custom':
+        if dist in ('euclidean', 'custom'):
             dist_calc = self.euclidean_distance
-        elif dist == 'cdist_sq':
-            dist_calc = lambda features, centroids: cdist(features, centroids, 'sqeuclidean')
-        elif dist == 'cdist':
-            dist_calc = lambda features, centroids: cdist(features, centroids, 'euclidean')
+        elif dist == 'norm':
+            dist_calc = lambda features, centroids: cdist(features, centroids, metric='cityblock')
         else:
-            raise Exception('Error: dist should be either custom, cdist, or cdist_sq')
+            raise Exception('Error: dist should be either custom, euclidean, or norm')
         # Split test set in x and y
-        self.test_x, self.test_y = self.x_y_split(test_data)
+        if x_y_split:
+            self.test_x, self.test_y = self.x_y_split(test_data)
+        else:
+            self.test_x = test_data
         # Run Kmeans and time it
         timeit_fit = timeit(internal_only=True)
         with timeit_fit:
-            self._run(dist_calc=dist_calc)
+            self._run(dist_calc=dist_calc, max_iter=max_iter)
         self.prediction_time = timeit_fit.total
 
         # Fix class mismatch (for 2 classes only)
-        self.accuracy = np.count_nonzero(self.predicted_y == self.test_y) / len(self.predicted_y)
-        if self.accuracy < 0.5 and self.num_classes == 2:
-            self.predicted_y = 1 - self.predicted_y
+        if fix_mismatch:
             self.accuracy = np.count_nonzero(self.predicted_y == self.test_y) / len(self.predicted_y)
+            if self.accuracy < 0.5 and self.k == 2:
+                self.predicted_y = 1 - self.predicted_y
+                self.accuracy = np.count_nonzero(self.predicted_y == self.test_y) / len(
+                    self.predicted_y)
 
         return self.predicted_y
 
-    def _run(self, dist_calc: Callable) -> None:
+    def _run(self, dist_calc: Callable, max_iter: int = None) -> None:
         """ Run k-means algorithm to convergence. """
 
         # Loop until convergence
@@ -196,19 +239,33 @@ class Kmeans:
             # Compute distances from sample points to centroids
             # all pair-wise _squared_ distances
             centroid_distances = dist_calc(self.test_x, self.centroids)
-
             # Expectation step: assign clusters
             previous_assignments = self.predicted_y
             self.predicted_y = np.argmin(centroid_distances, axis=1)
 
             # Maximization step: Update centroid for each cluster
-            for cluster_ind in range(self.num_classes):
+            for cluster_ind in range(self.k):
                 features_of_curr_cluster = self.test_x[self.predicted_y == cluster_ind]
                 self.centroids[cluster_ind, :] = np.mean(features_of_curr_cluster, axis=0)
             # Break Condition
             self.membership_changes.append(np.count_nonzero(self.predicted_y != previous_assignments))
             if (self.predicted_y == previous_assignments).all():
                 break
+            elif max_iter:
+                if self.total_epochs > max_iter:
+                    break
+
+            if self.total_epochs % 50 == 0:
+                logger.info(
+                    f"Epoch {self.total_epochs}: Changes={self.membership_changes[-1]}")
+
+    def get_compressed(self):
+        compressed_x = self.centroids[self.predicted_y]
+        return compressed_x
+
+    @staticmethod
+    def get_rmse(reconstructed, original):
+        return np.sqrt(np.mean(np.square(reconstructed - original)))
 
     def get_statistics(self) -> Tuple[float, List[float], float, int, List[int]]:
 
@@ -245,17 +302,27 @@ class WTA:
     y: np.ndarray
     predicted_y: np.ndarray
     centroids: np.ndarray
-    unique_classes: np.ndarray
-    num_classes: int
+    unique_classes: Union[np.ndarray, None]
     total_epochs: int
     epsilon: float
     membership_changes: List[int]
+    k: int
 
-    def __init__(self, train_data: np.ndarray, seed: int = None) -> None:
+    def __init__(self, train_data: np.ndarray, k: int = None, x_y_split: bool = True,
+                 seed: int = None) -> None:
         # Split train dataset into x and y
-        self.train_x, self.train_y = self.x_y_split(train_data)
-        self.unique_classes = np.unique(self.train_y)
-        self.num_classes = len(self.unique_classes)
+        if x_y_split:
+            self.train_x, self.train_y = self.x_y_split(train_data)
+            self.unique_classes = np.unique(self.train_y)
+        else:
+            self.train_x = train_data
+            self.unique_classes = None
+        if k:
+            self.k = k
+        elif hasattr(self, 'unique_classes'):
+            self.k = len(self.unique_classes)
+        else:
+            raise Exception("When k is undefined, you can't have x_y_split=False")
         if seed is not None:
             np.random.seed(seed)
 
@@ -263,30 +330,63 @@ class WTA:
     def x_y_split(dataset: np.ndarray) -> Tuple[np.array, np.array]:
         return dataset[:, :-1], dataset[:, -1].astype(int)
 
+    @staticmethod
+    def random_init(ds, k, ):
+        """
+        Create random cluster centroids.
+
+        Parameters
+        ----------
+        ds : numpy array
+            The dataset to be used for centroid initialization.
+        k : int
+            The desired number of clusters for which centroids are required.
+        Returns
+        -------
+        centroids : numpy array
+            Collection of k centroids as a numpy array.
+        """
+
+        centroids = []
+        m = np.shape(ds)[0]
+
+        for _ in range(k):
+            r = np.random.randint(0, m - 1)
+            centroids.append(ds[r])
+
+        return np.array(centroids)
+
     def fit(self):
         # initialize centroids randomly as distinct elements of features
         num_train_points = self.train_x.shape[0]  # num sample points
-        centroid_ids = np.random.choice(num_train_points, (self.num_classes,), replace=False)
-        self.centroids = self.train_x[centroid_ids, :]
+        centroid_ids = np.random.choice(num_train_points, (self.k,), replace=False)
+        self.centroids = self.train_x[centroid_ids, :].astype(np.float32)
 
-    def predict(self, test_data: np.ndarray, epsilon: float = 0.01):
+    def predict(self, test_data: np.ndarray, epsilon: float = 0.01, x_y_split: bool = True,
+                max_iter: int = None, fix_mismatch: bool = True):
         # Split test set
-        self.test_x, self.test_y = self.x_y_split(test_data)
+        if x_y_split:
+            self.test_x, self.test_y = self.x_y_split(test_data)
+        else:
+            self.test_x = test_data
         # Run WTA and time it
         timeit_fit = timeit(internal_only=True)
         with timeit_fit:
-            self._run(epsilon=epsilon)
+            self._run(epsilon=epsilon, max_iter=max_iter)
         self.prediction_time = timeit_fit.total
-        # Fix class mismatch (for 2 classes only)
-        self.accuracy = np.count_nonzero(self.predicted_y == self.test_y) / len(self.predicted_y)
-        if self.accuracy < 0.5 and len(self.unique_classes) == 2:
-            self.predicted_y = 1 - self.predicted_y
+
+        if fix_mismatch:
+            # Fix class mismatch (for 2 classes only)
             self.accuracy = np.count_nonzero(self.predicted_y == self.test_y) / len(self.predicted_y)
+            if self.accuracy < 0.5 and len(self.unique_classes) == 2:
+                self.predicted_y = 1 - self.predicted_y
+                self.accuracy = np.count_nonzero(self.predicted_y == self.test_y) / len(
+                    self.predicted_y)
 
         self.epsilon = epsilon
         return self.predicted_y
 
-    def _run(self, epsilon: float = 0.01):
+    def _run(self, epsilon: float = 0.01, max_iter: int = None):
         num_test_points = self.test_x.shape[0]
         self.predicted_y = np.zeros(num_test_points, dtype=np.uint8)
         self.total_epochs = 1
@@ -306,12 +406,28 @@ class WTA:
             # Modify Centroids
             for j in range(cen.shape[0]):
                 self.centroids[int(cen.iloc[int(j), -1]), :] \
-                    += epsilon*(cen.iloc[j, :-1].values-self.centroids[int(cen.iloc[int(j), -1]), :])
+                    += epsilon * (
+                        cen.iloc[j, :-1].values - self.centroids[int(cen.iloc[int(j), -1]), :])
 
             # Break Condition
             self.membership_changes.append(np.count_nonzero(self.predicted_y != previous_assignments))
             if (self.predicted_y == previous_assignments).all():
                 break
+            elif max_iter:
+                if self.total_epochs > max_iter:
+                    break
+
+            if self.total_epochs % 50 == 0:
+                logger.info(
+                    f"Epoch {self.total_epochs}: Changes={self.membership_changes[-1]}")
+
+    def get_compressed(self):
+        compressed_x = self.centroids[self.predicted_y].astype(np.uint8)
+        return compressed_x
+
+    @staticmethod
+    def get_rmse(reconstructed, original):
+        return np.sqrt(np.mean(np.square(reconstructed - original)))
 
     def get_statistics(self) -> Tuple[float, List[float], float, int, List[int]]:
 
