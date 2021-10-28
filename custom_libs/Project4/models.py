@@ -1,10 +1,6 @@
 import numpy as np
-import pandas as pd
-from scipy.spatial.distance import cdist
-from time import time
 from typing import *
 from custom_libs import ColorizedLogger, timeit
-import random
 
 logger = ColorizedLogger('Project4 Models', 'green')
 
@@ -19,16 +15,17 @@ class MultiLayerPerceptron:
     activation_derivative: List[Union[None, Callable]]
 
     def __init__(self, units: List[int], activations: List[str], seed: int = None) -> None:
-        """ a = g(z)
-            z = w.T @ a_previous + b
+        """
             g = activation function
+            z = w.T @ a_previous + b
+            a = g(z)
         """
         if seed:
             np.random.seed(seed)
         self.units = units
         self.n_layers = len(self.units)
         activations = ['identity' if activation_str is None else activation_str
-                          for activation_str in activations]
+                       for activation_str in activations]
         self.activation = [getattr(self, activation_str)
                            for activation_str in activations]
         self.activation_derivative = [getattr(self, f"{activation_str}_derivative")
@@ -63,10 +60,11 @@ class MultiLayerPerceptron:
             raise Exception("train.shape[1] is not matching units[0]!")
 
         accuracies = []
+        losses = []
 
         # --- Train Loop --- #
         for epoch in range(1, max_epochs + 1):
-            if debug['top'] > 2 or (debug['top'] > 1 and epoch % 10 == 0) or \
+            if debug['top'] > 2 or (debug['top'] > 1 and epoch % 1 == 0) or \
                     (debug['top'] > 0 and epoch % 100 == 0):
                 logger.info(f"Epoch: {epoch}", color="red")
                 show_batch = True
@@ -81,22 +79,15 @@ class MultiLayerPerceptron:
                 if debug['top'] > 2 and show_batch:
                     logger.info(f"  Batch: {batch_ind}", color='yellow')
                 self.run_batch(data_batch=train_batch, lr=lr, debug=debug)
-            accuracy, ww = self.accuracy(train_x, train_y)
-            accuracies.append(accuracy/train.shape[0])
+            accuracy = self.accuracy(train_x, train_y)
+            loss = self.total_cost(train_x, train_y)
+            accuracies.append(accuracy / train.shape[0])
+            losses.append(loss)
             if show_batch:
-                if accuracy == 4:
-                    logger.info("  Accuracy on training data: {} / {}".format(accuracy, train.shape[0]),
-                                on_color='on_red')
-                    logger.info(f"  Weights: {[round(ww_, 4) for ww_ in ww]}")
-                elif accuracy == 3:
-                    logger.info("  Accuracy on training data: {} / {}".format(accuracy, train.shape[0]),
-                                on_color="on_yellow")
-                    logger.info(f"  Weights: {[round(ww_, 4) for ww_ in ww]}")
-                else:
-                    logger.info(
-                        "  Accuracy on training data: {} / {}".format(accuracy, train.shape[0]))
-                    logger.info(f"  Weights: {[round(ww_, 4) for ww_ in ww]}")
-        return accuracies
+                logger.info(f"  Loss: {loss[0]:.5f}")
+                logger.info(
+                    "  Accuracy on training data: {} / {}".format(accuracy, train.shape[0]))
+        return accuracies, losses
 
     def run_batch(self, data_batch: np.ndarray, lr: float, debug: Dict):
         batch_x, batch_y = self.x_y_split(data_batch)
@@ -143,9 +134,8 @@ class MultiLayerPerceptron:
         db = []
         dw = []
         # Calculate backprop input which is da of last layer
-        da_old = self.cost_derivative(z[-1], batch_y)
         da = self.cost_derivative(a[-1], batch_y)
-        for l_ind, layer_units in list(enumerate(self.units))[2:0:-1]:  # layers: last->2nd
+        for l_ind, layer_units in list(enumerate(self.units))[-1:0:-1]:  # layers: last->2nd
             g_prime = self.activation_derivative[l_ind - 1](z[l_ind])
             dz = da * g_prime
             db_ = dz
@@ -177,6 +167,7 @@ class MultiLayerPerceptron:
         for l_ind, layer_units in enumerate(self.units[:-1]):
             self.weights[l_ind] -= (lr / batch_size) * dw[l_ind]
             self.biases[l_ind] -= (lr / batch_size) * db[l_ind]
+
             if debug['w'] > 2:
                 if l_ind == 0:
                     logger.info("    Update Weights", color="cyan")
@@ -185,7 +176,6 @@ class MultiLayerPerceptron:
                             f"({lr}/{batch_size}) * dw({dw[l_ind].shape}")
                 logger.info(f"        b({self.weights[l_ind].shape}) -= "
                             f"({lr}/{batch_size}) * db({db[l_ind].shape}")
-
     @staticmethod
     def identity(z):
         return z
@@ -207,29 +197,43 @@ class MultiLayerPerceptron:
         return cls.sigmoid(z) * (1 - cls.sigmoid(z))
 
     def predict(self, x: Iterable[np.ndarray]) -> \
-            Iterable[int]:
+            Tuple[Iterable[int], Iterable[np.ndarray]]:
         y_predicted = []
-        ww = []
+        y_raw_predictions = []
         for x_row in x:
             x_row = x_row[np.newaxis, :]
             z, a = self.feed_forward(x_row)
-            prediction_raw = float(a[-1])
-            ww.append(prediction_raw)
+            prediction_raw = a[-1]
+            y_raw_predictions.append(prediction_raw)
             prediction = self.classify(prediction_raw)
             # logger.info(f"weight: {prediction_raw}, y_pred: {prediction}")
             y_predicted.append(prediction)
-        return y_predicted, ww
+        return y_predicted, y_raw_predictions
 
-    def accuracy(self, data_x: np.ndarray, data_y: np.ndarray):
+    def accuracy(self, data_x: np.ndarray, data_y: np.ndarray) -> int:
         # logger.nl()
-        predictions, ww = self.predict(data_x)
+        predictions, _ = self.predict(data_x)
         result_accuracy = sum(int(pred == true) for (pred, true) in zip(predictions, data_y))
-        return result_accuracy, ww
+        return result_accuracy
+
+    def total_cost(self, data_x: np.ndarray, data_y: np.ndarray):
+        predictions, predictions_raw = self.predict(data_x)
+        sum_cost = 0.0
+        for ind, prediction_raw in enumerate(predictions_raw):
+            current_y = int(data_y[ind])
+            try:
+                prediction_raw = prediction_raw[current_y]
+            except Exception as e:
+                print("current_y: ", current_y)
+                print("prediction_raw: ", prediction_raw)
+                raise e
+            sum_cost += current_y * np.log(1e-15 + prediction_raw)
+        mean_cost = -1.0/len(data_y) * sum_cost
+        return mean_cost
 
     @staticmethod
-    def classify(y: float) -> int:
-        y = 0 if y < 0.5 else 1
-        return y
+    def classify(y: np.ndarray) -> int:
+        return y.argmax()
 
     @staticmethod
     def x_y_split(dataset: np.ndarray) -> Tuple[np.array, np.array]:
