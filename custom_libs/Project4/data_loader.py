@@ -5,6 +5,7 @@ import gzip
 import pickle
 from typing import *
 import os.path
+from sklearn.model_selection import train_test_split
 
 from custom_libs import ColorizedLogger
 
@@ -22,9 +23,13 @@ class DataLoader:
     pima_te: np.ndarray
     flowers: np.ndarray
     xor: np.ndarray
-    mnist: List[np.ndarray]
+    mnist_tr: np.ndarray
+    mnist_te: np.ndarray
+    mnist_val: np.ndarray
 
-    def __init__(self, datasets: List[str], data_folder: str = None):
+    def __init__(self, datasets: List[str], data_folder: str = None, seed: int = None):
+        if seed:
+            np.seed(seed)
         if len(self.all_datasets.intersection(datasets)) == 0:
             raise Exception(f"No supported datasets given. Options: {self.all_datasets}")
         self.active_datasets = datasets
@@ -52,9 +57,11 @@ class DataLoader:
                                  (1, 1, 0)))
         if 'mnist' in self.active_datasets:
             mnist_loader = MnistDownloader()
-            self.mnist = mnist_loader.load()
-            self.mnist[1] = self.mnist[1][:, np.newaxis]
-            self.mnist[3] = self.mnist[1][:, np.newaxis]
+            mnist = mnist_loader.load()
+            self.mnist_tr = np.concatenate([mnist[0], mnist[1][:, np.newaxis]], axis=1)
+            mnist_te = np.concatenate([mnist[2], mnist[3][:, np.newaxis]], axis=1)
+            self.mnist_te, self.mnist_val = train_test_split(mnist_te, test_size=0.5)
+
 
     def normalize_pima(self, print_statistics: bool = False) -> None:
         if 'pima' in self.active_datasets:
@@ -98,7 +105,7 @@ class DataLoader:
         if 'xor' in self.active_datasets:
             return_datasets['xor'] = self.xor
         if 'mnist' in self.active_datasets:
-            return_datasets['mnist'] = self.mnist
+            return_datasets['mnist'] = [self.mnist_tr, self.mnist_te, self.mnist_val]
         return return_datasets
 
     def print_statistics(self) -> None:
@@ -113,9 +120,9 @@ class DataLoader:
         if 'xor' in self.active_datasets:
             self._print_statistics(self.xor, "xor")
         if 'mnist' in self.active_datasets:
-            components = ('mnist_tr_x', 'mnist_tr_y', 'mnist_te_x', 'mnist_te_y')
-            for name, data in zip(components, self.mnist):
-                self._print_statistics(data, name)
+            self._print_statistics(self.mnist_tr, "mnist_tr")
+            self._print_statistics(self.mnist_te, "mnist_te")
+            self._print_statistics(self.mnist_val, "mnist_val")
 
     @staticmethod
     def _print_statistics(np_arr: np.array, var_name: str) -> None:

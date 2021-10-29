@@ -15,8 +15,11 @@ class MultiLayerPerceptron:
     weights: List[np.ndarray]
     activation: List[Union[None, Callable]]
     activation_derivative: List[Union[None, Callable]]
+    loss_functions: List[Callable]
+    loss_function_derivatives: List[Callable]
 
-    def __init__(self, units: List[int], activations: List[str], seed: int = None) -> None:
+    def __init__(self, units: List[int], activations: List[str], loss_functions: Iterable[str],
+                 seed: int = None) -> None:
         """
             g = activation function
             z = w.T @ a_previous + b
@@ -32,6 +35,9 @@ class MultiLayerPerceptron:
                            for activation_str in activations]
         self.activation_derivative = [getattr(self, f"{activation_str}_derivative")
                                       for activation_str in activations]
+        self.loss_functions = [getattr(self, loss_function) for loss_function in loss_functions]
+        self.loss_function_derivatives = [getattr(self, f"{loss_function}_derivative")
+                                          for loss_function in loss_functions]
         self.initialize_weights()
 
     def initialize_weights(self):
@@ -45,7 +51,8 @@ class MultiLayerPerceptron:
 
     def train(self, train: np.ndarray = None, train_x: np.ndarray = None, train_y: np.ndarray = None,
               batch_size: int = 1, lr: float = 0.01, max_epochs: int = 1000, shuffle: bool = False,
-              regularization: str = None, debug: Dict = None):
+              regularization: str = None,
+              debug: Dict = None, epochs_show_every: int = 10, batches_show_every: int = None):
 
         if not debug:
             debug = {'top': 0, 'ff': 0, 'bp': 0, 'w': 0}
@@ -66,8 +73,7 @@ class MultiLayerPerceptron:
 
         # --- Train Loop --- #
         for epoch in range(1, max_epochs + 1):
-            if debug['top'] > 2 or (debug['top'] > 1 and epoch % 1 == 0) or \
-                    (debug['top'] > 0 and epoch % 100 == 0):
+            if debug['top'] > 0 and epoch % epochs_show_every == 0:
                 logger.info(f"Epoch: {epoch}", color="red")
                 show_batch = True
             else:
@@ -78,17 +84,26 @@ class MultiLayerPerceptron:
             train_batches = [train[k:k + batch_size] for k in range(0, train.shape[0], batch_size)]
             # Run mini-batches
             for batch_ind, train_batch in enumerate(train_batches):
-                if debug['top'] > 2 and show_batch:
-                    logger.info(f"  Batch: {batch_ind}", color='yellow')
+                if show_batch and batches_show_every:
+                    if batch_ind % batches_show_every == 0:
+                        logger.info(f"  Batch: {batch_ind}", color='yellow')
+
                 self.run_batch(data_batch=train_batch, lr=lr, debug=debug)
+                if show_batch and batches_show_every:
+                    if batch_ind % batches_show_every == 0:
+                        accuracy = self.accuracy(train_x, train_y)
+                        batch_losses = self.total_cost(train_x, train_y)
+                        for loss_type, loss in batch_losses:
+                            logger.info(f"  {loss_type} Loss: {loss:.5f}")
+                        logger.info("  Accuracy on training data: {} / {}".format(accuracy, train.shape[0]))
             accuracy = self.accuracy(train_x, train_y)
-            loss = self.total_cost(train_x, train_y)
+            epoch_losses = self.total_cost(train_x, train_y)
             accuracies.append(accuracy / train.shape[0])
-            losses.append(loss)
+            losses.append(epoch_losses)
             if show_batch:
-                logger.info(f"  Loss: {loss[0]:.5f}")
-                logger.info(
-                    "  Accuracy on training data: {} / {}".format(accuracy, train.shape[0]))
+                for loss_type, loss in epoch_losses:
+                    logger.info(f"  {loss_type} Loss: {loss:.5f}")
+                logger.info("  Accuracy on training data: {} / {}".format(accuracy, train.shape[0]))
         return accuracies, losses
 
     def run_batch(self, data_batch: np.ndarray, lr: float, debug: Dict):
@@ -108,6 +123,7 @@ class MultiLayerPerceptron:
 
     def feed_forward(self, batch_x: np.ndarray, debug: Dict = None) -> \
             Tuple[List[np.ndarray], List[np.ndarray]]:
+
         if not debug:
             debug = {'ff': 0}
         z_ = batch_x.T
@@ -136,7 +152,7 @@ class MultiLayerPerceptron:
         db = []
         dw = []
         # Calculate backprop input which is da of last layer
-        da = self.cost_derivative(a[-1], batch_y)
+        da = self.loss_function_derivatives[0](z[-1], a[-1], batch_y)
         for l_ind, layer_units in list(enumerate(self.units))[-1:0:-1]:  # layers: last->2nd
             g_prime = self.activation_derivative[l_ind - 1](z[l_ind])
             dz = da * g_prime
@@ -178,15 +194,12 @@ class MultiLayerPerceptron:
                             f"({lr}/{batch_size}) * dw({dw[l_ind].shape}")
                 logger.info(f"        b({self.weights[l_ind].shape}) -= "
                             f"({lr}/{batch_size}) * db({db[l_ind].shape}")
+
     @staticmethod
     def identity(z):
         return z
 
     identity_derivative = identity
-
-    @staticmethod
-    def cost_derivative(output_z, y):
-        return output_z - y
 
     @staticmethod
     def sigmoid(z):
@@ -196,9 +209,46 @@ class MultiLayerPerceptron:
         return a
 
     @classmethod
-    def sigmoid_derivative(cls, z):
+    def sigmoid_derivative(cls, a):
         """Derivative of the sigmoid function."""
-        return cls.sigmoid(z) * (1 - cls.sigmoid(z))
+        return cls.sigmoid(a) * (1 - cls.sigmoid(a))
+
+    @staticmethod
+    def relu(z):
+        return np.maximum(0, z)
+
+    @staticmethod
+    def relu_derivative(a):
+        return np.greater(a, 0).astype(int)
+
+    @staticmethod
+    def tanh(z):
+        """ Should use different loss. """
+        return np.tanh(z)
+
+    @staticmethod
+    def tanh_derivative(a):
+        """ Should use different loss. """
+        return 1 - a**2
+
+    @staticmethod
+    def softmax(z):
+        # Prawn to underflow/overflow
+        norm = z - np.max(z, axis=-1, keepdims=True)
+        numerator = np.exp(norm)
+
+        denominator = np.sum(numerator, axis=-1, keepdims=True)
+        a = numerator / denominator
+
+        return a
+
+    @staticmethod
+    def softmax_derivative(z):
+        # Prawn to underflow/overflow
+        si_sj = - z * z.reshape(z.shape[0], 1)
+        a = np.diag(z) + si_sj
+
+        return a
 
     def predict(self, x: Iterable[np.ndarray]) -> \
             Tuple[Iterable[int], Iterable[np.ndarray]]:
@@ -220,20 +270,34 @@ class MultiLayerPerceptron:
         result_accuracy = sum(int(pred == true) for (pred, true) in zip(predictions, data_y))
         return result_accuracy
 
-    def total_cost(self, data_x: np.ndarray, data_y: np.ndarray):
+    def total_cost(self, data_x: np.ndarray, data_y: np.ndarray) -> List[Tuple[str, float]]:
         predictions, predictions_raw = self.predict(data_x)
-        sum_cost = 0.0
+        sum_costs = [0.0 for _ in range(len(self.loss_functions))]
+        mean_costs = []
         for ind, prediction_raw in enumerate(predictions_raw):
             current_y = int(data_y[ind])
-            try:
-                prediction_raw = prediction_raw[current_y]
-            except Exception as e:
-                print("current_y: ", current_y)
-                print("prediction_raw: ", prediction_raw)
-                raise e
-            sum_cost += current_y * np.log(1e-15 + prediction_raw)
-        mean_cost = -1.0/len(data_y) * sum_cost
-        return mean_cost
+            prediction_raw = prediction_raw[current_y]
+            for loss_ind, loss_func in enumerate(self.loss_functions):
+                sum_costs[loss_ind] += loss_func(prediction_raw, current_y)
+        for loss_ind, loss_func in enumerate(self.loss_functions):
+            mean_costs.append((loss_func.__name__, 1.0/len(data_y) * sum_costs[loss_ind]))
+        return mean_costs
+
+    @staticmethod
+    def cross_entropy(a, y):
+        return np.sum(np.nan_to_num(-y*np.log(a)-(1-y)*np.log(1-a)))
+
+    @staticmethod
+    def cross_entropy_derivative(z, a, y):
+        return a - y
+
+    @staticmethod
+    def mse(a, y):
+        return np.sum((a - y) ** 2)
+
+    @staticmethod
+    def mse_derivative(z, a, y):
+        return a - y
 
     @staticmethod
     def classify(y: np.ndarray) -> int:
