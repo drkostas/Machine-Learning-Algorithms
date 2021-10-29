@@ -4,6 +4,8 @@ from custom_libs import ColorizedLogger, timeit
 
 logger = ColorizedLogger('Project4 Models', 'green')
 
+# np.seterr(all='raise')
+
 
 class MultiLayerPerceptron:
     """ Multi Layer Perceptron Model. """
@@ -189,7 +191,9 @@ class MultiLayerPerceptron:
     @staticmethod
     def sigmoid(z):
         """The sigmoid function."""
-        return 1.0 / (1.0 + np.exp(-z))
+        z = np.clip(z, -500, 500)  # Handle np.exp overflow
+        a = 1.0 / (1.0 + np.exp(-z))
+        return a
 
     @classmethod
     def sigmoid_derivative(cls, z):
