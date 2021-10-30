@@ -60,70 +60,80 @@ class MultiLayerPerceptron:
         # Lists to gather accuracies and losses
         accuracies = []
         losses = []
+        times = []
         # --- Train Loop --- #
         data_x, _ = self.x_y_split(data)
-        for epoch in range(1, max_epochs + 1):
-            if epoch % debug['epochs'] == 0:
-                logger.info(f"Epoch: {epoch}", color="red")
-                show_epoch = True
-            else:
-                show_epoch = False
-            # Shuffle
-            if shuffle:
-                shuffle_idx = np.random.permutation(data_x.shape[0])
-                data_x = data_x[shuffle_idx, :]
-                one_hot_y = one_hot_y[shuffle_idx, :]
-            # Create Mini-Batches
-            train_batches = [(data_x[k:k + batch_size], one_hot_y[k:k + batch_size])
-                             for k in range(0, data_x.shape[0], batch_size)]
-            # Run mini-batches
-            for batch_ind, (x_batch, one_hot_y_batch) in enumerate(train_batches):
-                batch_ind += 1
-                if show_epoch and batch_ind % debug['batches'] == 0:
-                    logger.info(f"  Batch: {batch_ind}", color='yellow')
-                self.run_batch(batch_x=x_batch, batch_y=one_hot_y_batch, lr=lr, momentum=momentum,
-                               regularization_param=regularization_param, debug=debug)
-                # Calculate Batch Accuracy and Losses
-                if show_epoch and batch_ind % debug['batches'] == 0:
-                    accuracy = self.accuracy(data_x, one_hot_y, debug)
-                    batch_losses = self.total_loss(data_x, one_hot_y, regularization_param, debug)
-                    self.print_stats(batch_losses, accuracy, data_x.shape[0], '    ')
+        try:
+            for epoch in range(1, max_epochs + 1):
+                if epoch % debug['epochs'] == 0:
+                    logger.info(f"Epoch: {epoch}", color="red")
+                    show_epoch = True
+                else:
+                    show_epoch = False
+                epoch_timeit = timeit(internal_only=True)
+                with epoch_timeit:
+                    # Shuffle
+                    if shuffle:
+                        shuffle_idx = np.random.permutation(data_x.shape[0])
+                        data_x = data_x[shuffle_idx, :]
+                        one_hot_y = one_hot_y[shuffle_idx, :]
+                    # Create Mini-Batches
+                    train_batches = [(data_x[k:k + batch_size], one_hot_y[k:k + batch_size])
+                                     for k in range(0, data_x.shape[0], batch_size)]
+                    # Run mini-batches
+                    for batch_ind, (x_batch, one_hot_y_batch) in enumerate(train_batches):
+                        batch_ind += 1
+                        if show_epoch and batch_ind % debug['batches'] == 0:
+                            logger.info(f"  Batch: {batch_ind}", color='yellow')
+                        self.run_batch(batch_x=x_batch, batch_y=one_hot_y_batch, lr=lr, momentum=momentum,
+                                       regularization_param=regularization_param, debug=debug)
+                        # Calculate Batch Accuracy and Losses
+                        if show_epoch and batch_ind % debug['batches'] == 0:
+                            accuracy = self.accuracy(data_x, one_hot_y, debug)
+                            batch_losses = self.total_loss(data_x, one_hot_y, regularization_param, debug)
+                            self.print_stats(batch_losses, accuracy, data_x.shape[0], '    ')
+                epoch_time = epoch_timeit.total
+                # Gather Results
+                times.append(epoch_time)
+                accuracy = self.accuracy(data_x, one_hot_y, debug)
+                epoch_losses = self.total_loss(data_x, one_hot_y, regularization_param, debug)
+                accuracies.append(accuracy / data_x.shape[0])
+                losses.append(epoch_losses)
+                # Calculate Epoch Accuracy and Losses
+                if show_epoch:
+                    self.print_stats(epoch_losses, accuracy, data_x.shape[0], '  ')
+                if early_stopping:
+                    if 'accuracy' in early_stopping and epoch > early_stopping['wait']:
+                        recent_accuracy = accuracies[-1]*data_x.shape[0]
+                        previous_accuracy = accuracies[-2]*data_x.shape[0]
+                        if recent_accuracy - previous_accuracy < early_stopping['accuracy']:
+                            logger.info(f"Early stopping (acc): {recent_accuracy}-{previous_accuracy} = "
+                                        f"{(recent_accuracy - previous_accuracy)} < "
+                                        f"{early_stopping['accuracy']}", color='yellow')
+                            break
+                    if 'loss' in early_stopping and epoch > early_stopping['wait']:
+                        if losses[-1][0][1] - losses[-2][0][1] < early_stopping['loss']:
+                            print(losses[-1][0][1], losses[-2][0][1])
 
-            # Gather Results
-            accuracy = self.accuracy(data_x, one_hot_y, debug)
-            epoch_losses = self.total_loss(data_x, one_hot_y, regularization_param, debug)
-            accuracies.append(accuracy / data_x.shape[0])
-            losses.append(epoch_losses)
-            # Calculate Epoch Accuracy and Losses
-            if show_epoch:
-                self.print_stats(epoch_losses, accuracy, data_x.shape[0], '  ')
-            if early_stopping:
-                if 'accuracy' in early_stopping and epoch > early_stopping['wait']:
-                    if accuracies[-1]-accuracies[-2] < early_stopping['accuracy']:
-                        logger.info(f"Early stopping (acc): {accuracies[-1]}-{accuracies[-2]} = "
-                                    f"{(accuracies[-1] - accuracies[-2])} < "
-                                    f"{early_stopping['accuracy']}", color='yellow')
-                        break
-                if 'loss' in early_stopping and epoch > early_stopping['wait']:
-                    if losses[-1][0][1]-losses[-2][0][1] < early_stopping['loss']:
-                        print(losses[-1][0][1], losses[-2][0][1])
-
-                        logger.info(f"Early stopping (loss): "
-                                    f"{losses[-1][0][1]:5f}-{losses[-2][0][1]:5f} = "
-                                    f"{(losses[-1][0][1] - losses[-2][0][1]):5f} < "
-                                    f"{early_stopping['loss']}", color='yellow')
-                        break
-
-        logger.info(f"Finished after {epoch} epochs", color='red')
-        self.print_stats(epoch_losses, accuracy, data_x.shape[0], '')
-
-        return accuracies, losses
+                            logger.info(f"Early stopping (loss): "
+                                        f"{losses[-1][0][1]:5f}-{losses[-2][0][1]:5f} = "
+                                        f"{(losses[-1][0][1] - losses[-2][0][1]):5f} < "
+                                        f"{early_stopping['loss']}", color='yellow')
+                            break
+        except KeyboardInterrupt:
+            logger.warn(f"Forcefully stopped after epoch {epoch-1}")
+        if len(accuracies) > 0:
+            logger.info(f"Finished after {epoch} epochs", color='red')
+            logger.info(f"Avg epoch time: {sum(times)/len(times):.4f} sec(s)", color='yellow')
+            logger.info(f"Accumulated epoch time: {sum(times):.4f} sec(s)", color='yellow')
+            self.print_stats(epoch_losses, accuracy, data_x.shape[0], '')
+            return accuracies, losses, times
 
     @staticmethod
     def print_stats(losses, accuracy, size, padding):
         for loss_type, loss in losses:
             logger.info(f"{padding}{loss_type} Loss: {loss:.5f}")
-        logger.info(f"{padding}Accuracy on training data: {accuracy}/{size}")
+        logger.info(f"{padding}Accuracy: {accuracy}/{size}")
 
     def run_batch(self, batch_x: np.ndarray, batch_y: np.ndarray, lr: float,
                   momentum: float, regularization_param: float, debug: Dict):
@@ -315,7 +325,7 @@ class MultiLayerPerceptron:
         for ind, prediction_raw in enumerate(predictions_raw):
             current_y = data_y[ind]
             for loss_ind, loss_func in enumerate(self.loss_functions):
-                mean_costs[loss_ind] += loss_func(prediction_raw, current_y)/len(predictions_raw)
+                mean_costs[loss_ind] += loss_func(prediction_raw, current_y) / len(predictions_raw)
                 mean_costs[loss_ind] += 0.5 * (regularization_param / len(predictions_raw)) * sum(
                     np.linalg.norm(w) ** 2
                     for w in self.weights)
@@ -330,7 +340,7 @@ class MultiLayerPerceptron:
 
     @staticmethod
     def cross_entropy(a, y):
-        return np.sum(np.nan_to_num(-y * np.log(a+1e-15) - (1 - y) * np.log(1 - a+1e-15)))
+        return np.sum(np.nan_to_num(-y * np.log(a + 1e-15) - (1 - y) * np.log(1 - a + 1e-15)))
 
     @staticmethod
     def cross_entropy_derivative(z, a, y):
