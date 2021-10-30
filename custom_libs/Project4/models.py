@@ -4,7 +4,7 @@ from custom_libs import ColorizedLogger, timeit
 
 logger = ColorizedLogger('Project4 Models', 'green')
 
-# np.seterr(all='raise')
+np.seterr(all='warn')
 
 
 class MultiLayerPerceptron:
@@ -28,6 +28,7 @@ class MultiLayerPerceptron:
         if seed:
             np.random.seed(seed)
         self.units = units
+        logger.info(f"Units per Layer: {self.units}")
         self.n_layers = len(self.units)
         activations = ['identity' if activation_str is None else activation_str
                        for activation_str in activations]
@@ -233,22 +234,12 @@ class MultiLayerPerceptron:
 
     @staticmethod
     def softmax(z):
-        # Prawn to underflow/overflow
-        norm = z - np.max(z, axis=-1, keepdims=True)
-        numerator = np.exp(norm)
-
-        denominator = np.sum(numerator, axis=-1, keepdims=True)
-        a = numerator / denominator
+        y = np.exp(z - np.max(z))
+        a = y / np.sum(np.exp(z))
 
         return a
 
-    @staticmethod
-    def softmax_derivative(z):
-        # Prawn to underflow/overflow
-        si_sj = - z * z.reshape(z.shape[0], 1)
-        a = np.diag(z) + si_sj
-
-        return a
+    softmax_derivative = sigmoid_derivative
 
     def predict(self, x: Iterable[np.ndarray]) -> \
             Tuple[Iterable[int], Iterable[np.ndarray]]:

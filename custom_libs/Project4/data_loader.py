@@ -62,37 +62,80 @@ class DataLoader:
             mnist_te = np.concatenate([mnist[2], mnist[3][:, np.newaxis]], axis=1)
             self.mnist_te, self.mnist_val = train_test_split(mnist_te, test_size=0.5)
 
+    @staticmethod
+    def normalize_(train, test=None, val_set=None, epsilon: float = 1e-100):
+        train_ = np.copy(train).astype(np.float64)
+        means_ = train_[:, :-1].mean(axis=0)
+        max_ = train_[:, :-1].max(axis=0)
+        min_ = train_[:, :-1].min(axis=0)
+        denominator = (max_ - min_ + epsilon)
+        train_[:, :-1] = (train_[:, :-1] - means_) / denominator
+        return_datasets = [train_]
+        if test is not None:
+            test_ = np.copy(test).astype(np.float64)
+            test_[:, :-1] = (test_[:, :-1] - means_) / denominator
+            return_datasets.append(test_)
+        if val_set is not None:
+            val_set_ = np.copy(val_set).astype(np.float64)
+            val_set_[:, :-1] = (val_set_[:, :-1] - means_) / denominator
+            return_datasets.append(val_set_)
+        return tuple(return_datasets)
 
-    def normalize_pima(self, print_statistics: bool = False) -> None:
-        if 'pima' in self.active_datasets:
-            # Normalize Pima
-            pima_tr_orig = np.copy(self.pima_tr)
-            pima_te_orig = np.copy(self.pima_te)
-            pima_means = pima_tr_orig[:, :7].mean(axis=0)
-            pima_max = pima_tr_orig[:, :7].max(axis=0)
-            pima_min = pima_tr_orig[:, :7].min(axis=0)
-            self.pima_tr[:, :7] = (pima_tr_orig[:, :7] - pima_means) / (pima_max - pima_min)
-            self.pima_te[:, :7] = (pima_te_orig[:, :7] - pima_means) / (pima_max - pima_min)
-            if print_statistics:
-                self._print_statistics(self.pima_tr, "pima_tr")
-                self._print_statistics(self.pima_te, "pima_te")
-        else:
-            logger.warning("Pima hasn't been loaded. Skipping..")
+    @staticmethod
+    def standarize_(train, test=None, val_set=None, epsilon: float = 1e-100):
+        train_ = np.copy(train).astype(np.float64)
+        means_ = train_[:, :-1].mean(axis=0)
+        std_ = train_[:, :-1].std(axis=0) + epsilon
+        train_[:, :-1] = (train_[:, :-1] - means_) / std_
+        return_datasets = [train_]
+        if test is not None:
+            test_ = np.copy(test).astype(np.float64)
+            test_[:, :-1] = (test_[:, :-1] - means_) / std_
+            return_datasets.append(test_)
+        if val_set is not None:
+            val_set_ = np.copy(val_set).astype(np.float64)
+            val_set_[:, :-1] = (val_set_[:, :-1] - means_) / std_
+            return_datasets.append(val_set_)
+        return tuple(return_datasets)
 
-    def standarize_pima(self, print_statistics: bool = False) -> None:
-        if 'pima' in self.active_datasets:
-            # Normalize Pima
-            pima_tr_orig = np.copy(self.pima_tr)
-            pima_te_orig = np.copy(self.pima_te)
-            pima_means = pima_tr_orig[:, :7].mean(axis=0)
-            pima_stds = pima_tr_orig[:, :7].std(axis=0)
-            self.pima_tr[:, :7] = (pima_tr_orig[:, :7] - pima_means) / pima_stds
-            self.pima_te[:, :7] = (pima_te_orig[:, :7] - pima_means) / pima_stds
-            if print_statistics:
-                self._print_statistics(self.pima_tr, "pima_tr")
-                self._print_statistics(self.pima_te, "pima_te")
+    def normalize(self, dataset: str, print_statistics: bool = False) -> None:
+        if dataset == 'synth' and dataset in self.active_datasets:
+            self.synth_te, self.synth_tr = self.normalize_(self.synth_te, self.synth_tr)
+        elif dataset == 'pima' and dataset in self.active_datasets:
+            self.pima_tr, self.pima_te = self.normalize_(self.pima_tr, self.pima_te)
+        elif dataset == 'flowers' and dataset in self.active_datasets:
+            self.flowers = self.normalize_(self.flowers)[0]
+        elif dataset == 'xor' and dataset in self.active_datasets:
+            self.xor = self.normalize_(self.xor)[0]
+        elif dataset == 'mnist' and dataset in self.active_datasets:
+            self.mnist_tr, self.mnist_te, self.mnist_val = self.normalize_(self.mnist_tr,
+                                                                           self.mnist_te,
+                                                                           self.mnist_val)
         else:
-            logger.warning("Pima hasn't been loaded. Skipping..")
+            logger.warning(f"{dataset} hasn't been loaded or not supported.")
+
+    def standarize(self, dataset: str, print_statistics: bool = False) -> None:
+        if dataset == 'synth' and dataset in self.active_datasets:
+            self.synth_te, self.synth_tr = self.standarize_(self.synth_te, self.synth_tr)
+        elif dataset == 'pima' and dataset in self.active_datasets:
+            self.pima_tr, self.pima_te = self.standarize_(self.pima_tr, self.pima_te)
+        elif dataset == 'flowers' and dataset in self.active_datasets:
+            self.flowers = self.standarize_(self.flowers)[0]
+        elif dataset == 'xor' and dataset in self.active_datasets:
+            self.xor = self.standarize_(self.xor)[0]
+        elif dataset == 'mnist' and dataset in self.active_datasets:
+            self.mnist_tr, self.mnist_te, self.mnist_val = self.standarize_(self.mnist_tr,
+                                                                            self.mnist_te,
+                                                                            self.mnist_val)
+        else:
+            logger.warning(f"{dataset} hasn't been loaded or not supported.")
+
+    @staticmethod
+    def one_hot_encode_last(data):
+        y = data[:, -1].T
+        y_one_hot = np.zeros((y.size, y.max() + 1))
+        y_one_hot[np.arange(y.size), y] = 1
+        return y_one_hot
 
     def get_datasets(self) -> Dict[str, List]:
         return_datasets = {}
