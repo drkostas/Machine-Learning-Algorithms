@@ -58,9 +58,15 @@ class DataLoader:
         if 'mnist' in self.active_datasets:
             mnist_loader = MnistDownloader()
             mnist = mnist_loader.load()
-            self.mnist_tr = np.concatenate([mnist[0], mnist[1][:, np.newaxis]], axis=1)
-            mnist_te = np.concatenate([mnist[2], mnist[3][:, np.newaxis]], axis=1)
-            self.mnist_te, self.mnist_val = train_test_split(mnist_te, test_size=0.5)
+            if len(mnist) == 4:
+                self.mnist_tr = np.concatenate([mnist[0], mnist[1][:, np.newaxis]], axis=1)
+                mnist_te = np.concatenate([mnist[2], mnist[3][:, np.newaxis]], axis=1)
+                self.mnist_te, self.mnist_val = train_test_split(mnist_te, test_size=0.5)
+            else:
+                mnist_tr, mnist_te, mnist_val = mnist
+                self.mnist_tr = np.concatenate([mnist_tr[0], mnist_tr[1][:, np.newaxis]], axis=1)
+                self.mnist_te = np.concatenate([mnist_te[0], mnist_te[1][:, np.newaxis]], axis=1)
+                self.mnist_val = np.concatenate([mnist_val[0], mnist_val[1][:, np.newaxis]], axis=1)
 
     @staticmethod
     def normalize_(train, test=None, val_set=None, epsilon: float = 1e-100):
@@ -132,7 +138,7 @@ class DataLoader:
 
     @staticmethod
     def one_hot_encode_last(data):
-        y = data[:, -1].T
+        y = data[:, -1].copy().T.astype(int)
         y_one_hot = np.zeros((y.size, y.max() + 1))
         y_one_hot[np.arange(y.size), y] = 1
         return y_one_hot
@@ -217,7 +223,14 @@ class MnistDownloader:
         print("Save complete.")
 
     def load(self) -> List:
-        with open(self.pkl_path, 'rb') as f:
-            mnist = pickle.load(f)
-        return [mnist["training_images"], mnist["training_labels"], mnist["test_images"], mnist[
-            "test_labels"]]
+        try:
+            with open(self.pkl_path, 'rb') as f:
+                mnist = pickle.load(f)
+            datasets = [mnist["training_images"], mnist["training_labels"],
+                        mnist["test_images"], mnist["test_labels"]]
+        except UnicodeDecodeError as e:
+            with open(self.pkl_path, 'rb') as f:
+                mnist = pickle._Unpickler(f)
+                mnist.encoding = 'latin1'
+                datasets = list(mnist.load())
+        return datasets

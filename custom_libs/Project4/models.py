@@ -5,7 +5,7 @@ from custom_libs import ColorizedLogger, timeit
 logger = ColorizedLogger('Project4 Models', 'green')
 
 np.seterr(all='warn')
-np.seterr(all='raise')
+# np.seterr(all='raise')
 
 
 class MultiLayerPerceptron:
@@ -20,7 +20,7 @@ class MultiLayerPerceptron:
     loss_function_derivatives: List[Callable]
 
     def __init__(self, units: List[int], activations: List[str], loss_functions: Iterable[str],
-                 seed: int = None) -> None:
+                 symmetric_weights: bool = True, seed: int = None) -> None:
         """
             g = activation function
             z = w.T @ a_previous + b
@@ -29,7 +29,7 @@ class MultiLayerPerceptron:
         if seed:
             np.random.seed(seed)
         self.units = units
-        logger.info(f"Units per Layer: {self.units}")
+        # logger.info(f"Units per Layer: {self.units}")
         self.n_layers = len(self.units)
         activations = ['linear' if activation_str is None else activation_str
                        for activation_str in activations]
@@ -40,23 +40,26 @@ class MultiLayerPerceptron:
         self.loss_functions = [getattr(self, loss_function) for loss_function in loss_functions]
         self.loss_function_derivatives = [getattr(self, f"{loss_function}_derivative")
                                           for loss_function in loss_functions]
-        self.initialize_weights()
+        self.initialize_weights(symmetric_weights)
 
-    def initialize_weights(self):
-        self.biases = [np.random.randn(y, 1) for y in self.units[1:]]
-        self.weights = [np.random.randn(y, x) for x, y in zip(self.units[:-1], self.units[1:])]
-        # self.biases = [np.ones((y, 1)) for y in self.units[1:]]
-        # self.weights = [np.zeros((y, x)) for x, y in zip(self.units[:-1], self.units[1:])]
-        logger.info(f"Shapes of biases: {[bias.shape for bias in self.biases]}")
-        logger.info(f"Shapes of weights: {[weights.shape for weights in self.weights]}")
+    def initialize_weights(self, symmetric_weights: bool):
+        if symmetric_weights:
+            self.biases = [np.random.randn(y, 1) for y in self.units[1:]]
+            self.weights = [np.random.randn(y, x) for x, y in zip(self.units[:-1], self.units[1:])]
+        else:
+            self.biases = [np.random.rand(y, 1) for y in self.units[1:]]
+            self.weights = [np.random.rand(y, x) for x, y in zip(self.units[:-1], self.units[1:])]
+        # logger.info(f"Shapes of biases: {[bias.shape for bias in self.biases]}")
+        # logger.info(f"Shapes of weights: {[weights.shape for weights in self.weights]}")
 
     def train(self, data: np.ndarray, one_hot_y: np.ndarray,
               batch_size: int = 1, lr: float = 0.01, momentum: float = 0.0,
               max_epochs: int = 1000, early_stopping: Dict = None, shuffle: bool = False,
-              regularization_param: float = 0.0, debug: Dict = None):
+              regularization_param: float = 0.0, debug: Dict = None) -> Tuple[List, List, List]:
         # Set Default values
         if not debug:
-            debug = {'epochs': 10 ** 10, 'batches': 10 ** 10, 'ff': False, 'bp': False, 'w': False}
+            debug = {'epochs': 10 ** 10, 'batches': 10 ** 10,
+                     'ff': False, 'bp': False, 'w': False, 'metrics': False}
         # Lists to gather accuracies and losses
         accuracies = []
         losses = []
@@ -103,12 +106,19 @@ class MultiLayerPerceptron:
                 if show_epoch:
                     self.print_stats(epoch_losses, accuracy, data_x.shape[0], '  ')
                 if early_stopping:
+                    if 'max_accuracy' in early_stopping and epoch > early_stopping['wait']:
+                        recent_accuracy = accuracies[-1]
+                        if recent_accuracy >= early_stopping['max_accuracy']:
+                            logger.info(f"Early stopping (Max acc): "
+                                        f"{recent_accuracy} = {early_stopping['max_accuracy']}",
+                                        color='yellow')
+                            break
                     if 'accuracy' in early_stopping and epoch > early_stopping['wait']:
                         recent_accuracy = accuracies[-1]*data_x.shape[0]
                         previous_accuracy = accuracies[-2]*data_x.shape[0]
                         if recent_accuracy - previous_accuracy < early_stopping['accuracy']:
-                            logger.info(f"Early stopping (acc): {recent_accuracy}-{previous_accuracy} = "
-                                        f"{(recent_accuracy - previous_accuracy)} < "
+                            logger.info(f"Early stopping (acc): {recent_accuracy}-{previous_accuracy}"
+                                        f" = {(recent_accuracy - previous_accuracy)} < "
                                         f"{early_stopping['accuracy']}", color='yellow')
                             break
                     if 'loss' in early_stopping and epoch > early_stopping['wait']:
@@ -128,6 +138,14 @@ class MultiLayerPerceptron:
             logger.info(f"Accumulated epoch time: {sum(times):.4f} sec(s)", color='yellow')
             self.print_stats(epoch_losses, accuracy, data_x.shape[0], '')
             return accuracies, losses, times
+
+    def test(self, data: np.ndarray, one_hot_y: np.ndarray, debug: Dict = None) -> float:
+        if not debug:
+            debug = {'epochs': 10 ** 10, 'batches': 10 ** 10,
+                     'ff': False, 'bp': False, 'w': False, 'metrics': False}
+        data_x, _ = self.x_y_split(data)
+        accuracy = self.accuracy(data_x, one_hot_y, debug)/data_x.shape[0]
+        return accuracy
 
     @staticmethod
     def print_stats(losses, accuracy, size, padding):
