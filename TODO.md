@@ -5,4 +5,4 @@ See the [issues](https://github.com/drkostas/cosc522/issues) too.
 - [X] Import Project 1 Class into Project 2 Notebook
 - [X] Finish Project 2
 - [X] Finish Project 3
-- [ ] Finish Project 4
+- [X] Finish Project 4
