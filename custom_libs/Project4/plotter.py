@@ -20,9 +20,10 @@ def plot_results(title: str, losses: List, test_accuracy: float, accuracies: Lis
     x = np.arange(1, len(accuracies_) + 1)
 
     fig, ax = plt.subplots(2, 2, figsize=(11, 4))
-    fig.suptitle(f"{title}\n"
-                 f"Max Train Accuracy: {max(accuracies) * 100:.4f} %\n"
-                 f"Test Accuracy: {test_accuracy * 100:.4f} %")
+    sup_title = f"{title}\nMax Train Accuracy: {max(accuracies) * 100:.4f} %\n"
+    if test_accuracy is not None:
+        sup_title += f"\nTest Accuracy: {test_accuracy * 100:.4f} %"
+    fig.suptitle(sup_title)
     # Accuracies
     ax[0][0].plot(x, accuracies_)
     ax[0][0].set_title(f'Accuracies per epoch')
