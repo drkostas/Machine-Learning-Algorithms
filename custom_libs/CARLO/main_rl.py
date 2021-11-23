@@ -68,7 +68,7 @@ c1.max_speed = 30.0  # let's say the maximum is 30 m/s (108 km/h)
 c1.velocity = Point(0, 3.0)
 
 # reinforcement learning steering control
-rl_mode = 'train'
+rl_mode = 'test'
 c1_rl = None
 episode_num = 15000
 if rl_mode == 'train':
