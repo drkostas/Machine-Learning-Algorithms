@@ -4,10 +4,17 @@ from tkinter import *
 import pygame
 
 from custom_libs import ColorizedLogger
-from custom_libs.CARLO.world import World
-from custom_libs.CARLO.agents import Car, RingBuilding, CircleBuilding, Painting, Pedestrian
-from custom_libs.CARLO.geometry import Point
-from custom_libs.CARLO.steering_control import PIDSteering
+
+import sys
+sys.path.append("custom_libs/CARLO")
+from world import World
+from agents import Car, RingBuilding, CircleBuilding, Painting, Pedestrian
+from geometry import Point
+# from custom_libs.CARLO.world import World
+# from custom_libs.CARLO.agents import Car, RingBuilding, CircleBuilding, Painting, Pedestrian
+# from custom_libs.CARLO.geometry import Point
+# from custom_libs.CARLO.steering_control import PIDSteering
+# from custom_libs.CARLO.interactive_controllers import KeyboardController
 
 logger = ColorizedLogger('Circular Scenario', 'cyan')
 
@@ -58,22 +65,26 @@ class CircularScenario:
         self.w.add(c1)
         return cb, rb, c1
 
-    def run(self, human_control: bool = False):
+    def run(self, human_control: bool = False, speed: int = 4):
         self.cb, self.rb, self.c1 = self.build_scene()
         self.w.render()
         try:
             if human_control:
-                self._run_with_human_control()
+                self._run_with_human_control(speed=speed)
             else:
-                self._run_automatic()
+                self._run_automatic(speed=speed)
         except Exception as e:
-            logger.info(e)
+            self.w.close()
+            pygame.display.quit()
+            pygame.quit()
+            logger.warn(str(e))
+            raise e
 
         self.w.close()
         pygame.display.quit()
         pygame.quit()
 
-    def _run_automatic(self):
+    def _run_automatic(self, speed: int = 4):
         # Let's implement some simple policy for the car c1
         desired_lane = 1
         return_val = 0
@@ -101,7 +112,7 @@ class CircularScenario:
 
             self.w.tick()  # This ticks the world for one time step (dt second)
             self.w.render()
-            time.sleep(self.dt / 4)  # Let's watch it 4x
+            time.sleep(self.dt / speed)  # Let's watch it 4x
 
             if self.w.collision_exists():  # We can check if there is any collision at all.
                 logger.info('Collision exists somewhere...')
@@ -110,7 +121,7 @@ class CircularScenario:
 
         return return_val
 
-    def _run_with_human_control(self):
+    def _run_with_human_control(self, speed: int = 4):
         from custom_libs.CARLO.interactive_controllers import KeyboardController
         return_val = 0
         self.c1.set_control(0., 0.)  # Initially, the car will have 0 steering and 0 throttle.
@@ -119,8 +130,9 @@ class CircularScenario:
             self.c1.set_control(controller.steering, controller.throttle)
             self.w.tick()  # This ticks the world for one time step (dt second)
             self.w.render()
-            time.sleep(self.dt / 4)  # Let's watch it 4x
+            time.sleep(self.dt / speed)
             if self.w.collision_exists():
+                logger.info("Collision exists..")
                 # import sys
                 # sys.exit(0)
                 return_val = 1
