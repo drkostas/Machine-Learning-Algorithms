@@ -65,22 +65,23 @@ class CircularScenario:
         c1.velocity = Point(0, 3.0)
         return c1, cb, rb, c1
 
-    def run(self, opt: str = 'default', speed: int = 4):
+    def run(self, opt: str = 'default', max_iters: int = 600, speed: int = 4, plot: bool = False):
         self.c1, self.cb, self.rb, self.c1 = self.build_scene()
         self.w.add(self.c1)
         self.w.render()
         try:
             if opt == 'default':
-                code, errors = self._run_default(speed=speed)
+                err_code, error_vals = self._run_default(max_iters=max_iters, speed=speed)
             elif opt == 'pid':
-                code, errors = self._run_pid(speed=speed)
+                err_code, error_vals = self._run_pid(max_iters=max_iters, speed=speed)
             elif opt == 'qlearning':
-                code, errors = self._run_qlearning()
+                err_code, error_vals = self._run_qlearning(max_iters=max_iters, speed=speed)
             elif opt == 'human_control':
-                code, errors = self._run_with_human_control(speed=speed)
+                err_code, error_vals = self._run_with_human_control(max_iters=max_iters, speed=speed)
             else:
                 raise NotImplementedError('Option not yet implemented!')
-            plt.plot(np.arange(len(errors)), errors)
+            if plot:
+                plt.plot(np.arange(len(error_vals)), error_vals)
         except Exception as e:
             self.w.close()
             pygame.display.quit()
@@ -92,12 +93,14 @@ class CircularScenario:
         pygame.display.quit()
         pygame.quit()
 
-    def _run_default(self, speed: int = 4):
+        return error_vals
+
+    def _run_default(self, max_iters: int = 600, speed: int = 4):
         # Let's implement some simple policy for the car c1
         desired_lane = 1
         return_val = 0
         errors = []
-        for k in range(600):
+        for k in range(max_iters):
             lp = 0.
             if self.c1.distanceTo(self.cb) < desired_lane * (
                     self.lane_width + self.lane_marker_width) + 0.2:
@@ -131,12 +134,12 @@ class CircularScenario:
 
         return return_val, errors
 
-    def _run_pid(self, speed: int = 4):
+    def _run_pid(self, max_iters: int = 600, speed: int = 4):
 
         pid_controller1 = PIDSteering(2.0, 0.001, 0.01, self.dt)
         errors = []
         return_val = 0
-        for k in range(600):
+        for k in range(max_iters):
             v1 = self.c1.center - self.cb.center
             v1 = np.mod(np.arctan2(v1.y, v1.x) + np.pi / 2, 2 * np.pi)
             err1 = v1 - self.c1.heading
@@ -155,12 +158,12 @@ class CircularScenario:
 
         return return_val, errors
 
-    def _run_with_human_control(self, speed: int = 4):
+    def _run_with_human_control(self, max_iters: int = 600, speed: int = 4):
         return_val = 0
         self.c1.set_control(0., 0.)  # Initially, the car will have 0 steering and 0 throttle.
         controller = KeyboardController(self.w)
         errors = []
-        for k in range(600):
+        for k in range(max_iters):
             self.c1.set_control(controller.steering, controller.throttle)
 
             v = self.c1.center - self.cb.center
@@ -178,7 +181,7 @@ class CircularScenario:
 
         return return_val, errors
 
-    def _run_qlearning(self, speed: int = 4):
+    def _run_qlearning(self, max_iters: int = 600, speed: int = 4):
         c1_rl = RLSteering(self.c1, self.w)
         saved_rl_obj = self.read_rl_policy(self.rl_path)
         c1_rl.overwrite(saved_rl_obj)
@@ -186,7 +189,7 @@ class CircularScenario:
         self.w.render()  # This visualizes the world we just constructed.
         errors = []
         return_val = 0
-        for k in range(600):
+        for k in range(max_iters):
             rl_action = c1_rl.get_rl_action(self.c1.center.x, self.c1.center.y)
             heading_new = self.c1.heading + rl_action
             self.c1.set_control(heading_new, 0.06)  # no acceleration
