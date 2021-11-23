@@ -8,6 +8,8 @@ class World:
         self.static_agents = []
         self.t = 0  # simulation time
         self.dt = dt  # simulation time step
+        self.width = width
+        self.height = height
         self.visualizer = Visualizer(width, height, ppm=ppm)
 
     def add(self, entity: Entity):
