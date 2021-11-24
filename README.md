@@ -30,6 +30,8 @@ All the libraries are located under *"\<project root>/custom_libs"*
 - ***Project2***: Loc: **Project2**, Desc: *Code needed in Project 2*
 - ***Project3***: Loc: **Project3**, Desc: *Code needed in Project 3*
 - ***Project4***: Loc: **Project4**, Desc: *Code needed in Project 4*
+- ***Project5***: Loc: **Project5**, Desc: *Code needed in Project 5*
+- ***CARLO***: Loc: **CARLO**, Desc: *RL/Pygame code used for Project 5*
 - ***ColorizedLogger***: Loc: **fancy_logger/colorized_logger.py**, Desc: *Logger with formatted text capabilities*
 - ***timeit***: Loc: **timing_tools/timeit.py**, Desc: *Decorator/ContextManager for counting the execution times of functions and code blocks*
 
