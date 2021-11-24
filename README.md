@@ -26,12 +26,12 @@ Read the [TODO](TODO.md) to see the current task list.
 ## Libraries Overview <a name = "lib_overview"></a>
 
 All the libraries are located under *"\<project root>/custom_libs"*
-- ***Project1***: Loc: **Project1**, Desc: *Code needed in Project 1*
-- ***Project2***: Loc: **Project2**, Desc: *Code needed in Project 2*
-- ***Project3***: Loc: **Project3**, Desc: *Code needed in Project 3*
-- ***Project4***: Loc: **Project4**, Desc: *Code needed in Project 4*
-- ***Project5***: Loc: **Project5**, Desc: *Code needed in Project 5*
-- ***CARLO***: Loc: **CARLO**, Desc: *RL/Pygame code used for Project 5*
+- ***Project1***: *Case 1,2,3 Bayesian Decision Rule*
+- ***Project2***: *kNN, K-means, WTA*
+- ***Project3***: *Dimensionality Reduction*
+- ***Project4***: *Neural Networks*
+- ***Project5***: *Reinforcement Learning (+Neural Network on Pima Dataset)*
+- ***CARLO***: *RL/Pygame code used for Project 5*
 - ***ColorizedLogger***: Loc: **fancy_logger/colorized_logger.py**, Desc: *Logger with formatted text capabilities*
 - ***timeit***: Loc: **timing_tools/timeit.py**, Desc: *Decorator/ContextManager for counting the execution times of functions and code blocks*
 
