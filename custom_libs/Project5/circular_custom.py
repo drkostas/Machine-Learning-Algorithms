@@ -81,7 +81,7 @@ class CircularScenario:
         self.cars, self.cb, self.rb = cars, cb, rb
 
     def run(self, opt: str = 'default', max_iters: int = 600, speed: int = 4, plot: bool = False,
-            render_only: int = None):
+            render_only: int = None, collect_data: bool = False):
         self.build_scene(render_only=render_only)
 
         self.w.render()
@@ -97,7 +97,8 @@ class CircularScenario:
                                                            render_only=render_only)
             elif opt == 'human':
                 err_code, error_vals = self._run_with_human_control(max_iters=max_iters, speed=speed,
-                                                                    render_only=render_only)
+                                                                    render_only=render_only,
+                                                                    collect_data=collect_data)
             else:
                 raise NotImplementedError('Option not yet implemented!')
             if plot:
@@ -197,7 +198,7 @@ class CircularScenario:
         cars_rl = []
         for car_ind, current_car in enumerate(self.cars):
             curr_car_rl = RLSteering(current_car, self.w)
-            saved_rl_obj = self.read_rl_policy(f'data/car{car_ind}_rl.pkl')
+            saved_rl_obj = self.read_pickle(f'data/car{car_ind}_rl.pkl')
             curr_car_rl.overwrite(saved_rl_obj)
             cars_rl.append(curr_car_rl)
 
@@ -232,22 +233,34 @@ class CircularScenario:
 
         return return_val, errors
 
-    def _run_with_human_control(self, max_iters: int = 600, speed: int = 4, render_only: int = None):
+    def _run_with_human_control(self, max_iters: int = 600, speed: int = 4,
+                                render_only: int = None, collect_data: bool = False):
         if render_only is None:
             render_only = 0  # Should select one in the human case
+        x = []
+        y = []
+        vx = []
+        vy = []
+        velocity = []
+        steering = []
         return_val = 0
         self.cars[render_only].set_control(0., 0.)  # Initially, the car will have 0 steering and 0 throttle.
         controller = KeyboardController(self.w)
         errors = []
         for k in range(max_iters):
             self.cars[render_only].set_control(controller.steering, controller.throttle)
-
+            x.append(self.cars[render_only].x)
+            y.append(self.cars[render_only].y)
             v = self.cars[render_only].center - self.cb.center
+            vx.append(v.x)
+            vy.append(v.y)
+            velocity.append(self.cars[render_only].speed)
             v = np.mod(np.arctan2(v.y, v.x) + np.pi / 2, 2 * np.pi)
             err1 = v - self.cars[render_only].heading
             errors.append(err1)
 
             self.w.tick()  # This ticks the world for one time step (dt second)
+            steering.append(self.cars[render_only].input_steering)
             self.w.render()
             time.sleep(self.dt / speed)
             if self.w.collision_exists():
@@ -255,9 +268,19 @@ class CircularScenario:
                 return_val = 1
                 break
 
+        if collect_data:
+            self.save_pickle(var=x, name='data/lr_x')
+            self.save_pickle(var=y, name='data/lr_y')
+            self.save_pickle(var=vx, name='data/lr_vx')
+            self.save_pickle(var=vy, name='data/lr_vy')
+            self.save_pickle(var=velocity, name='data/lr_velocity')
+            self.save_pickle(var=steering, name='data/lr_steering')
         return return_val, errors
 
-    def train(self, epochs: int = 15000):
+    def _run_with_lr(self, max_iters: int = 600, speed: int = 4, render_only: int = None):
+        pass
+
+    def train_qlearning(self, epochs: int = 15000):
         for car_ind in range(self.num_cars):
             logger.info(f"Training car {car_ind} for {epochs} epochs..")
             self.build_scene(render_only=car_ind)
@@ -266,24 +289,45 @@ class CircularScenario:
             current_car_rl = RLSteering(current_car, self.w, episode=epochs)
             current_car_rl.q_learning()
             current_car_rl.delete_vars()
-            self.save_rl_policy(current_car_rl, f'data/car{car_ind}_rl.pkl')
+            self.save_pickle(current_car_rl, f'data/car{car_ind}_rl.pkl')
 
             # close world
             self.w.close()
             pygame.display.quit()
             pygame.quit()
 
-    @staticmethod
-    def read_rl_policy(name: str):
-        with open(name, 'rb') as f:
-            var_rl = pickle.load(f)
-        f.close()
-        return var_rl
+    def train_lr(self, epochs: int = 15000):
+        from sklearn.linear_model import LinearRegression
+        from sklearn.model_selection import train_test_split
+        from sklearn.metrics import mean_squared_error, r2_score
+
+        x = self.read_pickle(name='data/lr_x')
+        y = self.read_pickle(name='data/lr_y')
+        vx = self.read_pickle(name='data/lr_vx')
+        vy = self.read_pickle(name='data/lr_vy')
+        velocity = self.read_pickle(name='data/lr_velocity')
+        steering = self.read_pickle(name='data/lr_steering')
+        data_x = np.column_stack((x, y, vx, vy, velocity))
+        data_y = np.array(steering)
+        train_x, test_x, train_y, test_y = train_test_split(data_x, data_y, test_size=0.25)
+
+        # Splitting the data into training and testing data
+        lr = LinearRegression(normalize=True)
+
+        lr.fit(train_x, train_y)
+        print(lr.score(test_x, test_y))
 
     @staticmethod
-    def save_rl_policy(var_rl, name: str):
+    def read_pickle(name: str):
+        with open(name, 'rb') as f:
+            var = pickle.load(f)
+        f.close()
+        return var
+
+    @staticmethod
+    def save_pickle(var, name: str):
         with open(name, 'wb') as f:
-            pickle.dump(var_rl, f)
+            pickle.dump(var, f)
         f.close()
 
 
