@@ -95,6 +95,9 @@ class CircularScenario:
             elif opt == 'qlearning':
                 err_code, error_vals = self._run_qlearning(max_iters=max_iters, speed=speed,
                                                            render_only=render_only)
+            elif opt == 'lr':
+                err_code, error_vals = self._run_lr(max_iters=max_iters, speed=speed,
+                                                    render_only=render_only)
             elif opt == 'human':
                 err_code, error_vals = self._run_with_human_control(max_iters=max_iters, speed=speed,
                                                                     render_only=render_only,
@@ -212,7 +215,8 @@ class CircularScenario:
                     if render_only != car_ind:
                         render_car = False
                 if render_car:
-                    rl_action = cars_rl[car_ind].get_rl_action(current_car.center.x, current_car.center.y)
+                    rl_action = cars_rl[car_ind].get_rl_action(current_car.center.x,
+                                                               current_car.center.y)
                     heading_new = current_car.heading + rl_action
                     current_car.set_control(heading_new, 0.06)  # no acceleration
 
@@ -233,6 +237,42 @@ class CircularScenario:
 
         return return_val, errors
 
+    def _run_lr(self, max_iters: int = 600, speed: int = 4, render_only: int = None):
+        lr = self.read_pickle(name='data/car0_lr.pkl')
+        errors = [[] for _ in range(len(self.cars))]
+
+        return_val = 0
+        for k in range(max_iters):
+            for car_ind, current_car in enumerate(self.cars):
+                render_car = True
+                if render_only is not None:
+                    if render_only != car_ind:
+
+                        render_car = False
+                if render_car:
+                    v1 = current_car.center - self.cb.center
+                    vx, vy = v1.x, v1.y
+                    v1 = np.mod(np.arctan2(v1.y, v1.x) + np.pi / 2, 2 * np.pi)
+                    err = v1 - current_car.heading
+                    errors[car_ind].append(err)
+
+                    test_row = np.array((self.cars[car_ind].x, self.cars[car_ind].y,
+                                         vx, vy, self.cars[car_ind].speed)).reshape(1, -1)
+                    heading_new1 = lr.predict(test_row)
+                    current_car.set_control(heading_new1, 0.06)
+
+            self.w.tick()  # This ticks the world for one time step (dt second)
+            self.w.render()
+            time.sleep(self.dt / speed)  # Let's watch it 4x
+
+            if self.w.collision_exists():  # We can check if there is any collision at all.
+                logger.info('Collision exists somewhere...')
+                return_val = 1
+                time.sleep(2)
+                break
+
+        return return_val, errors
+
     def _run_with_human_control(self, max_iters: int = 600, speed: int = 4,
                                 render_only: int = None, collect_data: bool = False):
         if render_only is None:
@@ -244,11 +284,12 @@ class CircularScenario:
         velocity = []
         steering = []
         return_val = 0
-        self.cars[render_only].set_control(0., 0.)  # Initially, the car will have 0 steering and 0 throttle.
+        self.cars[render_only].set_control(0.,
+                                           0.06)  # Initially, the car will have 0 steering and 0 throttle.
         controller = KeyboardController(self.w)
         errors = []
         for k in range(max_iters):
-            self.cars[render_only].set_control(controller.steering, controller.throttle)
+            self.cars[render_only].set_control(controller.steering, 0.06)  # controller.throttle)
             x.append(self.cars[render_only].x)
             y.append(self.cars[render_only].y)
             v = self.cars[render_only].center - self.cb.center
@@ -260,7 +301,7 @@ class CircularScenario:
             errors.append(err1)
 
             self.w.tick()  # This ticks the world for one time step (dt second)
-            steering.append(self.cars[render_only].input_steering)
+            steering.append(self.cars[render_only].inputSteering)
             self.w.render()
             time.sleep(self.dt / speed)
             if self.w.collision_exists():
@@ -268,17 +309,14 @@ class CircularScenario:
                 return_val = 1
                 break
 
-        if collect_data:
-            self.save_pickle(var=x, name='data/lr_x')
-            self.save_pickle(var=y, name='data/lr_y')
-            self.save_pickle(var=vx, name='data/lr_vx')
-            self.save_pickle(var=vy, name='data/lr_vy')
-            self.save_pickle(var=velocity, name='data/lr_velocity')
-            self.save_pickle(var=steering, name='data/lr_steering')
+        if collect_data and return_val == 0:
+            self.save_pickle(var=x, name='data/lr_x.pkl')
+            self.save_pickle(var=y, name='data/lr_y.pkl')
+            self.save_pickle(var=vx, name='data/lr_vx.pkl')
+            self.save_pickle(var=vy, name='data/lr_vy.pkl')
+            self.save_pickle(var=velocity, name='data/lr_velocity.pkl')
+            self.save_pickle(var=steering, name='data/lr_steering.pkl')
         return return_val, errors
-
-    def _run_with_lr(self, max_iters: int = 600, speed: int = 4, render_only: int = None):
-        pass
 
     def train_qlearning(self, epochs: int = 15000):
         for car_ind in range(self.num_cars):
@@ -296,17 +334,17 @@ class CircularScenario:
             pygame.display.quit()
             pygame.quit()
 
-    def train_lr(self, epochs: int = 15000):
+    def train_lr(self):
         from sklearn.linear_model import LinearRegression
         from sklearn.model_selection import train_test_split
         from sklearn.metrics import mean_squared_error, r2_score
 
-        x = self.read_pickle(name='data/lr_x')
-        y = self.read_pickle(name='data/lr_y')
-        vx = self.read_pickle(name='data/lr_vx')
-        vy = self.read_pickle(name='data/lr_vy')
-        velocity = self.read_pickle(name='data/lr_velocity')
-        steering = self.read_pickle(name='data/lr_steering')
+        x = self.read_pickle(name='data/lr_x.pkl')
+        y = self.read_pickle(name='data/lr_y.pkl')
+        vx = self.read_pickle(name='data/lr_vx.pkl')
+        vy = self.read_pickle(name='data/lr_vy.pkl')
+        velocity = self.read_pickle(name='data/lr_velocity.pkl')
+        steering = self.read_pickle(name='data/lr_steering.pkl')
         data_x = np.column_stack((x, y, vx, vy, velocity))
         data_y = np.array(steering)
         train_x, test_x, train_y, test_y = train_test_split(data_x, data_y, test_size=0.25)
@@ -315,7 +353,9 @@ class CircularScenario:
         lr = LinearRegression(normalize=True)
 
         lr.fit(train_x, train_y)
-        print(lr.score(test_x, test_y))
+        logger.info(f"Score: {lr.score(test_x, test_y)}")
+
+        self.save_pickle(var=lr, name='data/car0_lr.pkl')
 
     @staticmethod
     def read_pickle(name: str):
@@ -389,7 +429,7 @@ class RLSteering:
 
     def q_learning(self):
         for n_episode in range(self.episode):
-            if n_episode % int((self.episode/20)) == 0:
+            if n_episode % int((self.episode / 20)) == 0:
                 logger.info(f"Training epoch:  {n_episode}")
             car = self.car_pos_reset()  # reset
 
@@ -427,13 +467,13 @@ class RLSteering:
                     reward = 10
                 new_radius = np.sqrt(
                     (car.center.x - self.world.width / 2) ** 2 + (
-                                car.center.y - self.world.height / 2) ** 2)
+                            car.center.y - self.world.height / 2) ** 2)
                 reward -= 10 * abs(new_radius - self.radius)
 
                 # update Q value
                 max_q = max(self.Q[x_new, y_new, :])
                 self.Q[x, y, action] += self.alpha * (
-                            reward + self.gamma * max_q - self.Q[x, y, action])
+                        reward + self.gamma * max_q - self.Q[x, y, action])
 
                 # update policy
                 if collision is True:  # terminate
