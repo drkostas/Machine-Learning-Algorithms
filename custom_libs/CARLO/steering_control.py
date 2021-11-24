@@ -24,7 +24,8 @@ class PIDSteering:
 
 
 class RLSteering:
-	def __init__(self, car, world, friction=0.06, alpha=0.1, gamma=0.9, epsilon=0.1, episode=1000, resolution=0.2):
+	def __init__(self, car, world, friction=0.06, alpha=0.1, gamma=0.9, epsilon=0.1,
+	             episode=1000, resolution=0.2):
 		self.car = copy.copy(car)
 		self.world = copy.copy(world)
 		self.car_x_init = self.car.center.x
@@ -60,7 +61,8 @@ class RLSteering:
 
 	def q_learning(self):
 		for n_episode in range(self.episode):
-			print("Training epoch:", n_episode)
+			if n_episode % 100 == 0:
+				print("Training epoch:", n_episode)
 			car = self.car_pos_reset()  # reset
 
 			while True:
@@ -86,7 +88,6 @@ class RLSteering:
 				heading_new = heading + theta  # new heading
 				car.set_control(heading_new, self.friction)  # move
 				self.world.tick()
-				# self.world.render()
 
 				# calculate reward
 				x_new = self.pos_to_index(car.center.x)

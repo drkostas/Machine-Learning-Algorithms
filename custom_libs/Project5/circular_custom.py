@@ -21,10 +21,10 @@ logger = ColorizedLogger('Circular Scenario', 'cyan')
 class CircularScenario:
     def __init__(self, width: int, height: int, dt: float, build_radius: float,
                  num_lanes: int, lane_marker_width: float, num_lane_markers: int,
-                 lane_width: float, rl_path: str = 'data/car1_rl.pkl'):
+                 lane_width: float, num_cars: int = 1):
 
-        self.rl_path = rl_path
         self.w = World(dt=dt, width=width, height=height, ppm=6)
+        self.num_cars = num_cars
         self.width = width
         self.height = height
         self.build_radius = build_radius
@@ -33,9 +33,9 @@ class CircularScenario:
         self.lane_width = lane_width
         self.lane_marker_width = lane_marker_width
         self.dt = dt
-        self.c1, self.cb, self.rb, self.c1 = None, None, None, None
+        self.cars, self.cb, self.rb = None, None, None
 
-    def build_scene(self):
+    def build_scene(self, render_only: int = None):
 
         cb = CircleBuilding(Point(self.width / 2, self.height / 2), self.build_radius, 'gray80')
         self.w.add(cb)
@@ -60,28 +60,45 @@ class CircularScenario:
                                     heading=theta))
 
         # Create Car
-        c1 = Car(Point(91.75, 60), np.pi / 2)
-        c1.max_speed = 30.0  # let's say the maximum is 30 m/s (108 km/h)
-        c1.velocity = Point(0, 3.0)
-        return c1, cb, rb, c1
+        cars = []
+        px, py = 91.75, 60
+        for num_car in range(self.num_cars):
+            current_car = Car(Point(px, py), np.pi / 2)
+            current_car.max_speed = 30.0  # let's say the maximum is 30 m/s (108 km/h)
+            current_car.velocity = Point(0, 3.0)
+            cars.append(current_car)
+            px += self.lane_width
+            render_car = True
+            if render_only is not None:
+                if render_only != num_car:
+                    render_car = False
+            if render_car:
+                self.w.add(current_car)
+        self.cars, self.cb, self.rb = cars, cb, rb
 
-    def run(self, opt: str = 'default', max_iters: int = 600, speed: int = 4, plot: bool = False):
-        self.c1, self.cb, self.rb, self.c1 = self.build_scene()
-        self.w.add(self.c1)
+    def run(self, opt: str = 'default', max_iters: int = 600, speed: int = 4, plot: bool = False,
+            render_only: int = None):
+        self.build_scene(render_only=render_only)
+
         self.w.render()
         try:
             if opt == 'default':
-                err_code, error_vals = self._run_default(max_iters=max_iters, speed=speed)
+                err_code, error_vals = self._run_default(max_iters=max_iters, speed=speed,
+                                                         render_only=render_only)
             elif opt == 'pid':
-                err_code, error_vals = self._run_pid(max_iters=max_iters, speed=speed)
+                err_code, error_vals = self._run_pid(max_iters=max_iters, speed=speed,
+                                                     render_only=render_only)
             elif opt == 'qlearning':
-                err_code, error_vals = self._run_qlearning(max_iters=max_iters, speed=speed)
-            elif opt == 'human_control':
-                err_code, error_vals = self._run_with_human_control(max_iters=max_iters, speed=speed)
+                err_code, error_vals = self._run_qlearning(max_iters=max_iters, speed=speed,
+                                                           render_only=render_only)
+            elif opt == 'human':
+                err_code, error_vals = self._run_with_human_control(max_iters=max_iters, speed=speed,
+                                                                    render_only=render_only)
             else:
                 raise NotImplementedError('Option not yet implemented!')
             if plot:
-                plt.plot(np.arange(len(error_vals)), error_vals)
+                for car_ind in range(len(self.cars)):
+                    plt.plot(np.arange(len(error_vals[car_ind])), error_vals[car_ind])
         except Exception as e:
             self.w.close()
             pygame.display.quit()
@@ -95,33 +112,39 @@ class CircularScenario:
 
         return error_vals
 
-    def _run_default(self, max_iters: int = 600, speed: int = 4):
-        # Let's implement some simple policy for the car c1
-        desired_lane = 1
+    def _run_default(self, max_iters: int = 600, speed: int = 4, render_only: int = None):
+        # Let's implement some simple policy for the car current_car
         return_val = 0
-        errors = []
+        errors = [[] for _ in range(len(self.cars))]
         for k in range(max_iters):
-            lp = 0.
-            if self.c1.distanceTo(self.cb) < desired_lane * (
-                    self.lane_width + self.lane_marker_width) + 0.2:
-                lp += 0.
-            elif self.c1.distanceTo(self.rb) < (self.num_lanes - desired_lane - 1) * (
-                    self.lane_width + self.lane_marker_width) + 0.3:
-                lp += 1.
+            for car_ind, current_car in enumerate(self.cars):
+                render_car = True
+                if render_only is not None:
+                    if render_only != car_ind:
+                        render_car = False
+                if render_car:
+                    desired_lane = car_ind
+                    lp = 0.
+                    if current_car.distanceTo(self.cb) < desired_lane * (
+                            self.lane_width + self.lane_marker_width) + 0.2:
+                        lp += 0.
+                    elif current_car.distanceTo(self.rb) < (self.num_lanes - desired_lane - 1) * (
+                            self.lane_width + self.lane_marker_width) + 0.3:
+                        lp += 1.
 
-            v = self.c1.center - self.cb.center
-            v = np.mod(np.arctan2(v.y, v.x) + np.pi / 2, 2 * np.pi)
-            err = v - self.c1.heading
-            errors.append(err)
-            if self.c1.heading < v:
-                lp += 0.7
-            else:
-                lp += 0.
+                    v = current_car.center - self.cb.center
+                    v = np.mod(np.arctan2(v.y, v.x) + np.pi / 2, 2 * np.pi)
+                    err = v - current_car.heading
+                    errors[car_ind].append(err)
+                    if current_car.heading < v:
+                        lp += 0.7
+                    else:
+                        lp += 0.
 
-            if np.random.rand() < lp:
-                self.c1.set_control(0.2, 0.1)
-            else:
-                self.c1.set_control(-0.1, 0.1)
+                    if np.random.rand() < lp:
+                        current_car.set_control(0.2, 0.1)
+                    else:
+                        current_car.set_control(-0.1, 0.1)
 
             self.w.tick()  # This ticks the world for one time step (dt second)
             self.w.render()
@@ -130,22 +153,29 @@ class CircularScenario:
             if self.w.collision_exists():  # We can check if there is any collision at all.
                 logger.info('Collision exists somewhere...')
                 return_val = 1
+                time.sleep(2)
                 break
 
         return return_val, errors
 
-    def _run_pid(self, max_iters: int = 600, speed: int = 4):
+    def _run_pid(self, max_iters: int = 600, speed: int = 4, render_only: int = None):
 
         pid_controller1 = PIDSteering(2.0, 0.001, 0.01, self.dt)
-        errors = []
+        errors = [[] for _ in range(len(self.cars))]
         return_val = 0
         for k in range(max_iters):
-            v1 = self.c1.center - self.cb.center
-            v1 = np.mod(np.arctan2(v1.y, v1.x) + np.pi / 2, 2 * np.pi)
-            err1 = v1 - self.c1.heading
-            errors.append(err1)
-            heading_new1 = pid_controller1.correct(err1)
-            self.c1.set_control(heading_new1, 0.06)
+            for car_ind, current_car in enumerate(self.cars):
+                render_car = True
+                if render_only is not None:
+                    if render_only != car_ind:
+                        render_car = False
+                if render_car:
+                    v1 = current_car.center - self.cb.center
+                    v1 = np.mod(np.arctan2(v1.y, v1.x) + np.pi / 2, 2 * np.pi)
+                    err = v1 - current_car.heading
+                    errors[car_ind].append(err)
+                    heading_new1 = pid_controller1.correct(err)
+                    current_car.set_control(heading_new1, 0.06)
 
             self.w.tick()  # This ticks the world for one time step (dt second)
             self.w.render()
@@ -154,21 +184,63 @@ class CircularScenario:
             if self.w.collision_exists():  # We can check if there is any collision at all.
                 logger.info('Collision exists somewhere...')
                 return_val = 1
+                time.sleep(2)
                 break
 
         return return_val, errors
 
-    def _run_with_human_control(self, max_iters: int = 600, speed: int = 4):
+    def _run_qlearning(self, max_iters: int = 600, speed: int = 4, render_only: int = None):
+        cars_rl = []
+        for car_ind, current_car in enumerate(self.cars):
+            curr_car_rl = RLSteering(current_car, self.w)
+            saved_rl_obj = self.read_rl_policy(f'data/car{car_ind}_rl.pkl')
+            curr_car_rl.overwrite(saved_rl_obj)
+            cars_rl.append(curr_car_rl)
+
+        self.w.render()  # This visualizes the world we just constructed.
+        errors = [[] for _ in range(len(self.cars))]
         return_val = 0
-        self.c1.set_control(0., 0.)  # Initially, the car will have 0 steering and 0 throttle.
+        for k in range(max_iters):
+            for car_ind, current_car in enumerate(self.cars):
+                render_car = True
+                if render_only is not None:
+                    if render_only != car_ind:
+                        render_car = False
+                if render_car:
+                    rl_action = cars_rl[car_ind].get_rl_action(current_car.center.x, current_car.center.y)
+                    heading_new = current_car.heading + rl_action
+                    current_car.set_control(heading_new, 0.06)  # no acceleration
+
+                    v = current_car.center - self.cb.center
+                    v = np.mod(np.arctan2(v.y, v.x) + np.pi / 2, 2 * np.pi)
+                    err = v - current_car.heading
+                    errors[car_ind].append(err)
+
+            self.w.tick()  # This ticks the world for one time step (dt second)
+            self.w.render()
+            time.sleep(self.dt / speed)
+
+            if self.w.collision_exists():  # We can check if there is any collision at all.
+                logger.info('Collision exists somewhere...')
+                return_val = 1
+                # time.sleep(2)
+                # break
+
+        return return_val, errors
+
+    def _run_with_human_control(self, max_iters: int = 600, speed: int = 4, render_only: int = None):
+        if render_only is None:
+            render_only = 0  # Should select one in the human case
+        return_val = 0
+        self.cars[render_only].set_control(0., 0.)  # Initially, the car will have 0 steering and 0 throttle.
         controller = KeyboardController(self.w)
         errors = []
         for k in range(max_iters):
-            self.c1.set_control(controller.steering, controller.throttle)
+            self.cars[render_only].set_control(controller.steering, controller.throttle)
 
-            v = self.c1.center - self.cb.center
+            v = self.cars[render_only].center - self.cb.center
             v = np.mod(np.arctan2(v.y, v.x) + np.pi / 2, 2 * np.pi)
-            err1 = v - self.c1.heading
+            err1 = v - self.cars[render_only].heading
             errors.append(err1)
 
             self.w.tick()  # This ticks the world for one time step (dt second)
@@ -181,49 +253,22 @@ class CircularScenario:
 
         return return_val, errors
 
-    def _run_qlearning(self, max_iters: int = 600, speed: int = 4):
-        c1_rl = RLSteering(self.c1, self.w)
-        saved_rl_obj = self.read_rl_policy(self.rl_path)
-        c1_rl.overwrite(saved_rl_obj)
-
-        self.w.render()  # This visualizes the world we just constructed.
-        errors = []
-        return_val = 0
-        for k in range(max_iters):
-            rl_action = c1_rl.get_rl_action(self.c1.center.x, self.c1.center.y)
-            heading_new = self.c1.heading + rl_action
-            self.c1.set_control(heading_new, 0.06)  # no acceleration
-
-            v = self.c1.center - self.cb.center
-            v = np.mod(np.arctan2(v.y, v.x) + np.pi / 2, 2 * np.pi)
-            err1 = v - self.c1.heading
-            errors.append(err1)
-
-            self.w.tick()  # This ticks the world for one time step (dt second)
-            self.w.render()
-            time.sleep(self.dt / speed)
-
-            if self.w.collision_exists():  # We can check if there is any collision at all.
-                logger.info('Collision exists somewhere...')
-                return_val = 1
-                break
-
-        return return_val, errors
-
     def train(self, epochs: int = 15000):
-        self.c1 = self.cb, self.rb, self.c1 = self.build_scene()
-        self.w.add(self.c1)
-        self.w.render()
+        self.build_scene()
+        for car_ind, current_car in enumerate(self.cars):
+            logger.info(f"Training car {car_ind} for {epochs} epochs..")
+            self.build_scene(render_only=car_ind)
 
-        c1_rl = RLSteering(self.c1, self.w, episode=epochs)
-        c1_rl.q_learning()
-        c1_rl.delete_vars()
-        self.save_rl_policy(c1_rl, 'data/car1_rl.pkl')
 
-        # close world
-        self.w.close()
-        pygame.display.quit()
-        pygame.quit()
+            current_car_rl = RLSteering(current_car, self.w, episode=epochs)
+            current_car_rl.q_learning()
+            current_car_rl.delete_vars()
+            self.save_rl_policy(current_car_rl, f'data/car{car_ind}_rl.pkl')
+
+            # close world
+            self.w.close()
+            pygame.display.quit()
+            pygame.quit()
 
     @staticmethod
     def read_rl_policy(name: str):
