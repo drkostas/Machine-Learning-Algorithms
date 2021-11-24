@@ -23,7 +23,10 @@ class CircularScenario:
                  num_lanes: int, lane_marker_width: float, num_lane_markers: int,
                  lane_width: float, num_cars: int = 1):
 
-        self.w = World(dt=dt, width=width, height=height, ppm=6)
+        self.w = None
+        self.dt = dt
+        self.width = width
+        self.height = height
         self.num_cars = num_cars
         self.width = width
         self.height = height
@@ -37,6 +40,7 @@ class CircularScenario:
 
     def build_scene(self, render_only: int = None):
 
+        self.w = World(dt=self.dt, width=self.width, height=self.height, ppm=6)
         cb = CircleBuilding(Point(self.width / 2, self.height / 2), self.build_radius, 'gray80')
         self.w.add(cb)
 
@@ -254,11 +258,10 @@ class CircularScenario:
         return return_val, errors
 
     def train(self, epochs: int = 15000):
-        self.build_scene()
-        for car_ind, current_car in enumerate(self.cars):
+        for car_ind in range(self.num_cars):
             logger.info(f"Training car {car_ind} for {epochs} epochs..")
             self.build_scene(render_only=car_ind)
-
+            current_car = self.cars[car_ind]
 
             current_car_rl = RLSteering(current_car, self.w, episode=epochs)
             current_car_rl.q_learning()
@@ -342,14 +345,14 @@ class RLSteering:
 
     def q_learning(self):
         for n_episode in range(self.episode):
-            logger.info(f"Training epoch: {n_episode}")
+            if n_episode % int((self.episode/20)) == 0:
+                logger.info(f"Training epoch:  {n_episode}")
             car = self.car_pos_reset()  # reset
 
             while True:
                 heading = car.heading
                 x = self.pos_to_index(car.center.x)
                 y = self.pos_to_index(car.center.y)
-
                 # choose an action; epsilon-greedy
                 n_action = len(self.policy[x, y, :])
                 epsilon_ind = np.argmax(self.policy[x, y, :])
@@ -368,7 +371,6 @@ class RLSteering:
                 heading_new = heading + theta  # new heading
                 car.set_control(heading_new, self.friction)  # move
                 self.world.tick()
-                # self.world.render()
 
                 # calculate reward
                 x_new = self.pos_to_index(car.center.x)
@@ -381,13 +383,13 @@ class RLSteering:
                     reward = 10
                 new_radius = np.sqrt(
                     (car.center.x - self.world.width / 2) ** 2 + (
-                            car.center.y - self.world.height / 2) ** 2)
+                                car.center.y - self.world.height / 2) ** 2)
                 reward -= 10 * abs(new_radius - self.radius)
 
                 # update Q value
                 max_q = max(self.Q[x_new, y_new, :])
                 self.Q[x, y, action] += self.alpha * (
-                        reward + self.gamma * max_q - self.Q[x, y, action])
+                            reward + self.gamma * max_q - self.Q[x, y, action])
 
                 # update policy
                 if collision is True:  # terminate
@@ -402,6 +404,7 @@ class RLSteering:
                             self.policy[x, y, i] = (1 - self.epsilon) / n_max_q
                         else:
                             self.policy[x, y, i] = self.epsilon / (n_action - n_max_q - n_block)
+
         return self.policy
 
     def get_rl_action(self, pos_x, pos_y):
