@@ -1,3 +1,5 @@
+![Machine-Learning-Algorithms](docs/images/banner.png)
+
 # COSC 522
 
 [![GitHub license](https://img.shields.io/badge/license-MIT-blue.svg)](https://raw.githubusercontent.com/drkostas/cosc522/master/LICENSE)
