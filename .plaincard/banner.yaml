@@ -1,0 +1,14 @@
+kind: banner
+name: Machine-Learning-Algorithms
+line: Machine learning algorithms I wrote for a course at the University of Tennessee.
+accent: green
+diagram:
+- doc:
+    label: data
+- arrow
+- box:
+    text: classifiers
+    accent: true
+- arrow
+- chart:
+    label: results
